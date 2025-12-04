@@ -397,7 +397,7 @@
         let OPENCV_LATENCY = 500;  // ms
         let CAMERA_LATENCY = 200;  // ms
         let PREDICTION_TIME = 0;   // ms
-        const CAMERA_MAX_RATE = 90;  // deg/s
+        const CAMERA_MAX_RATE = 60;  // deg/s
         let CAMERA_MAX_PAN_ACCEL = 180; // deg/s^2
         let CAMERA_MAX_TILT_ACCEL = 180; // deg/s^2
         const ADSB_UPDATE_RATE = 5000; // ms
@@ -407,7 +407,7 @@
         let scene, camera, renderer;
         let aircraftMesh, groundGrid;
         
-function initThreeJS() {
+        function initThreeJS() {
             scene = new THREE.Scene();
             // Daylight Sky Color
             scene.background = new THREE.Color(0x87CEEB); 
@@ -664,6 +664,26 @@ function initThreeJS() {
             return Math.max(min, Math.min(max, val));
         }
 
+        // Quantize speed to 8-bit resolution over [-60, 60] range
+        function quantizeSpeed(speed) {
+            // 8-bit unsigned integer range: 0 to 255
+            // Map [-60, 60] to [0, 255]
+            const minSpeed = -60;
+            const maxSpeed = 60;
+            const range = maxSpeed - minSpeed;
+            const steps = 255; // 2^8 - 1
+            
+            // Normalize to 0-1
+            let normalized = (speed - minSpeed) / range;
+            normalized = clamp(normalized, 0, 1);
+            
+            // Quantize
+            const quantizedStep = Math.round(normalized * steps);
+            
+            // De-normalize back to speed
+            return (quantizedStep / steps) * range + minSpeed;
+        }
+
         // Get aircraft angles relative to camera pointing direction
         function getAircraftAngles() {
             const { n, e, d } = state.aircraft;
@@ -832,6 +852,10 @@ function initThreeJS() {
             panCmd = clamp(panCmd, -CAMERA_MAX_RATE, CAMERA_MAX_RATE);
             tiltCmd = clamp(tiltCmd, -CAMERA_MAX_RATE, CAMERA_MAX_RATE);
             
+            // Quantize speed (Simulate 8-bit resolution)
+            panCmd = quantizeSpeed(panCmd);
+            tiltCmd = quantizeSpeed(tiltCmd);
+            
             // Queue command with latency
             state.commandQueue.push({
                 time: state.time + CAMERA_LATENCY,
@@ -936,8 +960,8 @@ function initThreeJS() {
             ctx.fillStyle = '#1a1a3a';
             ctx.fillRect(0, 0, 300, 300);
             
-            // Scale: 300 pixels = 10000 meters (zoomed out a bit)
-            const scale = 300 / 10000;
+            // Scale: 300 pixels = 20000 meters (zoomed out a bit)
+            const scale = 300 / 20000;
             const cx = 150;
             const cy = 150;
             
@@ -953,7 +977,7 @@ function initThreeJS() {
             // Draw camera FOV cone
             const panRad = toRad(state.camera.pan);
             const halfFov = toRad(CAMERA_FOV_H / 2);
-            const fovDist = 5000 * scale;
+            const fovDist = 10000 * scale;
             
             ctx.fillStyle = 'rgba(0, 212, 255, 0.15)';
             ctx.beginPath();
@@ -978,14 +1002,7 @@ function initThreeJS() {
             ctx.arc(ax, ay, 4, 0, Math.PI * 2);
             ctx.fill();
             
-            // Draw aircraft velocity vector
-            const vscale = 20;
-            ctx.strokeStyle = '#00ff88';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(ax, ay);
-            ctx.lineTo(ax + state.aircraft.ve * scale * vscale, ay - state.aircraft.vn * scale * vscale);
-            ctx.stroke();
+            // Velocity vector removed for cleaner view
         }
 
         function drawHistory() {
