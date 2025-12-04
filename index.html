@@ -341,10 +341,10 @@
             <div class="panel">
                 <h3>Latency Settings</h3>
                 <div class="slider-group">
-                    <label><span>OpenCV Latency</span><span id="opencvLatencyVal">500 ms</span></label>
-                    <input type="range" id="opencvLatencySlider" min="0" max="500" step="10" value="500">
+                    <label><span>OpenCV Period</span><span id="opencvPeriodVal">500 ms</span></label>
+                    <input type="range" id="opencvPeriodSlider" min="0" max="500" step="10" value="500">
                     <div class="latency-bar">
-                        <div class="latency-fill" id="opencvLatency" style="width: 0%"></div>
+                        <div class="latency-fill" id="opencvPeriod" style="width: 0%"></div>
                     </div>
                 </div>
                 <div class="slider-group">
@@ -394,8 +394,8 @@
         // ============ CONSTANTS ============
         const CAMERA_FOV_H = 10;  // degrees
         const CAMERA_FOV_V = 7.5; // degrees
-        let OPENCV_LATENCY = 500;  // ms
-        let CAMERA_LATENCY = 200;  // ms
+        let OPENCV_PERIOD = 500;  // ms - time to analyze a single frame
+        let CAMERA_PERIOD = 200;  // ms - time to process one command
         let PREDICTION_TIME = 0;   // ms
         const CAMERA_MAX_RATE = 60;  // deg/s
         let CAMERA_MAX_PAN_ACCEL = 180; // deg/s^2
@@ -753,13 +753,13 @@
                 state.lastAdsbTime = state.time;
             }
             
-            // 3. OpenCV "detection" - simulate with latency
+            // 3. OpenCV "detection" - simulate with period (frame analysis time)
             // Push current true position into measurement queue
             if (isInFOV()) {
                 const { px, py, panError, tiltError } = aircraftToPixel();
                 const { azimuth, elevation } = getAircraftAngles();
                 state.measurementQueue.push({
-                    time: state.time + OPENCV_LATENCY,
+                    time: state.time + OPENCV_PERIOD,
                     captureTime: state.time,
                     px, py, panError, tiltError,
                     azimuth, elevation,
@@ -767,7 +767,7 @@
                 });
             } else {
                 state.measurementQueue.push({
-                    time: state.time + OPENCV_LATENCY,
+                    time: state.time + OPENCV_PERIOD,
                     captureTime: state.time,
                     valid: false
                 });
@@ -862,7 +862,7 @@
             
             // Queue command with latency
             state.commandQueue.push({
-                time: state.time + CAMERA_LATENCY,
+                time: state.time + CAMERA_PERIOD,
                 panRate: panCmd,
                 tiltRate: tiltCmd
             });
@@ -1113,11 +1113,11 @@
             
             // Latency bars
             const ocvProgress = (state.measurementQueue.length > 0) ? 
-                ((state.time - (state.measurementQueue[0].time - OPENCV_LATENCY)) / OPENCV_LATENCY * 100) : 0;
+                ((state.time - (state.measurementQueue[0].time - OPENCV_PERIOD)) / OPENCV_PERIOD * 100) : 0;
             const camProgress = (state.commandQueue.length > 0) ? 
-                ((state.time - (state.commandQueue[0].time - CAMERA_LATENCY)) / CAMERA_LATENCY * 100) : 0;
+                ((state.time - (state.commandQueue[0].time - CAMERA_PERIOD)) / CAMERA_PERIOD * 100) : 0;
             
-            document.getElementById('opencvLatency').style.width = Math.min(100, Math.max(0, ocvProgress)) + '%';
+            document.getElementById('opencvPeriod').style.width = Math.min(100, Math.max(0, ocvProgress)) + '%';
             document.getElementById('cameraLatency').style.width = Math.min(100, Math.max(0, camProgress)) + '%';
         }
 
@@ -1200,14 +1200,14 @@
         });
 
         // Latency and Dynamics Sliders
-        document.getElementById('opencvLatencySlider').addEventListener('input', (e) => {
-            OPENCV_LATENCY = parseInt(e.target.value);
-            document.getElementById('opencvLatencyVal').textContent = OPENCV_LATENCY + ' ms';
+        document.getElementById('opencvPeriodSlider').addEventListener('input', (e) => {
+            OPENCV_PERIOD = parseInt(e.target.value);
+            document.getElementById('opencvPeriodVal').textContent = OPENCV_PERIOD + ' ms';
         });
 
         document.getElementById('cameraLatencySlider').addEventListener('input', (e) => {
-            CAMERA_LATENCY = parseInt(e.target.value);
-            document.getElementById('cameraLatencyVal').textContent = CAMERA_LATENCY + ' ms';
+            CAMERA_PERIOD = parseInt(e.target.value);
+            document.getElementById('cameraLatencyVal').textContent = CAMERA_PERIOD + ' ms';
         });
 
         document.getElementById('predictionSlider').addEventListener('input', (e) => {
