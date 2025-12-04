@@ -96,7 +96,6 @@
             margin-bottom: 10px;
         }
         .mode-cueing { background: #3a506b; color: #fff; }
-        .mode-acquiring { background: #8b4513; color: #fff; }
         .mode-tracking { background: #0a5c36; color: #00ff88; }
         .mode-lost { background: #8b0000; color: #ff6666; }
         .controls {
@@ -334,7 +333,7 @@
         const CAMERA_LATENCY = 200;  // ms
         const CAMERA_MAX_RATE = 90;  // deg/s
         const CAMERA_MAX_ACCEL = 180; // deg/s^2
-        const ADSB_UPDATE_RATE = 1000; // ms
+        const ADSB_UPDATE_RATE = 5000; // ms
         const IMAGE_WIDTH = 500;
         const IMAGE_HEIGHT = 375;
         const DT = 16; // ms (~60fps)
@@ -451,28 +450,10 @@
             state.aircraft.e += state.aircraft.ve * dtSec;
             state.aircraft.d += state.aircraft.vd * dtSec;
             
-            // 2. ADS-B update (every second)
+            // 2. ADS-B update (every 5 seconds)
             if (state.time - state.lastAdsbTime >= ADSB_UPDATE_RATE) {
                 state.adsbPosition = { ...state.aircraft };
                 state.lastAdsbTime = state.time;
-                
-                // If in cueing mode, slew camera to ADS-B position
-                if (state.mode === 'cueing' || state.mode === 'lost') {
-                    const { azimuth, elevation } = getAircraftAngles();
-                    // Fast slew to position
-                    const panError = azimuth - state.camera.pan;
-                    const tiltError = elevation - state.camera.tilt;
-                    
-                    // Command maximum rate toward target
-                    const slew = 60; // deg/s
-                    state.camera.cmdPanRate = clamp(panError * 5, -slew, slew);
-                    state.camera.cmdTiltRate = clamp(tiltError * 5, -slew, slew);
-                    
-                    // Check if close enough to switch to acquiring
-                    if (Math.abs(panError) < CAMERA_FOV_H/2 && Math.abs(tiltError) < CAMERA_FOV_V/2) {
-                        state.mode = 'acquiring';
-                    }
-                }
             }
             
             // 3. OpenCV "detection" - simulate with latency
@@ -496,76 +477,89 @@
                 state.lastMeasurement = state.measurementQueue.shift();
             }
             
-            // 4. PID Control (when in tracking mode and have measurement)
-            if (state.lastMeasurement && state.lastMeasurement.valid) {
-                if (state.mode === 'acquiring') {
-                    state.mode = 'tracking';
-                    // Reset PID integrators
-                    state.pid.integralX = 0;
-                    state.pid.integralY = 0;
-                }
-                
-                if (state.mode === 'tracking') {
-                    const { px, py } = state.lastMeasurement;
-                    const centerX = IMAGE_WIDTH / 2;
-                    const centerY = IMAGE_HEIGHT / 2;
-                    
-                    // Error in pixels
-                    const errorX = px - centerX;
-                    const errorY = centerY - py; // invert Y
-                    
-                    // Convert to degrees
-                    const pixelsPerDegH = IMAGE_WIDTH / CAMERA_FOV_H;
-                    const pixelsPerDegV = IMAGE_HEIGHT / CAMERA_FOV_V;
-                    const errorPanDeg = errorX / pixelsPerDegH;
-                    const errorTiltDeg = errorY / pixelsPerDegV;
-                    
-                    // PID
-                    const { Kp, Ki, Kd } = state.pid;
-                    
-                    // Integral (with anti-windup)
-                    state.pid.integralX = clamp(state.pid.integralX + errorPanDeg * dtSec, -10, 10);
-                    state.pid.integralY = clamp(state.pid.integralY + errorTiltDeg * dtSec, -10, 10);
-                    
-                    // Derivative
-                    const derivX = (errorPanDeg - state.pid.prevErrorX) / dtSec;
-                    const derivY = (errorTiltDeg - state.pid.prevErrorY) / dtSec;
-                    state.pid.prevErrorX = errorPanDeg;
-                    state.pid.prevErrorY = errorTiltDeg;
-                    
-                    // Output
-                    let panCmd = Kp * errorPanDeg + Ki * state.pid.integralX + Kd * derivX;
-                    let tiltCmd = Kp * errorTiltDeg + Ki * state.pid.integralY + Kd * derivY;
-                    
-                    // Clamp to max rate
-                    panCmd = clamp(panCmd, -CAMERA_MAX_RATE, CAMERA_MAX_RATE);
-                    tiltCmd = clamp(tiltCmd, -CAMERA_MAX_RATE, CAMERA_MAX_RATE);
-                    
-                    // Queue command with latency
-                    state.commandQueue.push({
-                        time: state.time + CAMERA_LATENCY,
-                        panRate: panCmd,
-                        tiltRate: tiltCmd
-                    });
-                    
-                    // Record history
-                    if (state.history.time.length > 500) {
-                        state.history.time.shift();
-                        state.history.panError.shift();
-                        state.history.tiltError.shift();
-                        state.history.panRateCmd.shift();
-                        state.history.tiltRateCmd.shift();
-                    }
-                    state.history.time.push(state.time / 1000);
-                    state.history.panError.push(errorPanDeg);
-                    state.history.tiltError.push(errorTiltDeg);
-                    state.history.panRateCmd.push(panCmd);
-                    state.history.tiltRateCmd.push(tiltCmd);
-                }
-            } else if (state.lastMeasurement && !state.lastMeasurement.valid && state.mode === 'tracking') {
-                // Lost track
+            // 4. Determine tracking mode
+            const haveOpencvLock = state.lastMeasurement && state.lastMeasurement.valid;
+            if (haveOpencvLock) {
+                state.mode = 'tracking';
+            } else if (state.adsbPosition) {
+                state.mode = 'cueing';
+            } else {
                 state.mode = 'lost';
             }
+            
+            // 5. PID Control - always runs, target depends on mode
+            let errorPanDeg = 0;
+            let errorTiltDeg = 0;
+            
+            if (haveOpencvLock) {
+                // Target: center of frame
+                const { px, py } = state.lastMeasurement;
+                const centerX = IMAGE_WIDTH / 2;
+                const centerY = IMAGE_HEIGHT / 2;
+                
+                // Error in pixels
+                const errorX = px - centerX;
+                const errorY = centerY - py; // invert Y
+                
+                // Convert to degrees
+                const pixelsPerDegH = IMAGE_WIDTH / CAMERA_FOV_H;
+                const pixelsPerDegV = IMAGE_HEIGHT / CAMERA_FOV_V;
+                errorPanDeg = errorX / pixelsPerDegH;
+                errorTiltDeg = errorY / pixelsPerDegV;
+            } else if (state.adsbPosition) {
+                // Target: ADS-B reported position
+                const an = state.adsbPosition.n;
+                const ae = state.adsbPosition.e;
+                const ad = state.adsbPosition.d;
+                const groundRange = Math.sqrt(an*an + ae*ae);
+                const adsbAzimuth = toDeg(Math.atan2(ae, an));
+                const adsbElevation = toDeg(Math.atan2(-ad, groundRange));
+                
+                errorPanDeg = adsbAzimuth - state.camera.pan;
+                errorTiltDeg = adsbElevation - state.camera.tilt;
+            }
+            
+            // PID calculation
+            const { Kp, Ki, Kd } = state.pid;
+            
+            // Integral (with anti-windup)
+            state.pid.integralX = clamp(state.pid.integralX + errorPanDeg * dtSec, -10, 10);
+            state.pid.integralY = clamp(state.pid.integralY + errorTiltDeg * dtSec, -10, 10);
+            
+            // Derivative
+            const derivX = (errorPanDeg - state.pid.prevErrorX) / dtSec;
+            const derivY = (errorTiltDeg - state.pid.prevErrorY) / dtSec;
+            state.pid.prevErrorX = errorPanDeg;
+            state.pid.prevErrorY = errorTiltDeg;
+            
+            // Output
+            let panCmd = Kp * errorPanDeg + Ki * state.pid.integralX + Kd * derivX;
+            let tiltCmd = Kp * errorTiltDeg + Ki * state.pid.integralY + Kd * derivY;
+            
+            // Clamp to max rate
+            panCmd = clamp(panCmd, -CAMERA_MAX_RATE, CAMERA_MAX_RATE);
+            tiltCmd = clamp(tiltCmd, -CAMERA_MAX_RATE, CAMERA_MAX_RATE);
+            
+            // Queue command with latency
+            state.commandQueue.push({
+                time: state.time + CAMERA_LATENCY,
+                panRate: panCmd,
+                tiltRate: tiltCmd
+            });
+            
+            // Record history
+            if (state.history.time.length > 500) {
+                state.history.time.shift();
+                state.history.panError.shift();
+                state.history.tiltError.shift();
+                state.history.panRateCmd.shift();
+                state.history.tiltRateCmd.shift();
+            }
+            state.history.time.push(state.time / 1000);
+            state.history.panError.push(errorPanDeg);
+            state.history.tiltError.push(errorTiltDeg);
+            state.history.panRateCmd.push(panCmd);
+            state.history.tiltRateCmd.push(tiltCmd);
             
             // 5. Process command queue (camera latency)
             while (state.commandQueue.length > 0 && state.commandQueue[0].time <= state.time) {
