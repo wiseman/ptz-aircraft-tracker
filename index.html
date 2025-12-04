@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PTZ Aircraft Tracker Simulation</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #00d4ff;
+            font-weight: 300;
+            letter-spacing: 2px;
+        }
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 20px;
+        }
+        .views {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .view-panel {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 15px;
+            border: 1px solid #0f3460;
+        }
+        .view-panel h3 {
+            color: #00d4ff;
+            margin-bottom: 10px;
+            font-weight: 400;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        canvas {
+            width: 100%;
+            border-radius: 8px;
+            background: #0a0a1a;
+        }
+        .side-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .panel {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 15px;
+            border: 1px solid #0f3460;
+        }
+        .panel h3 {
+            color: #00d4ff;
+            margin-bottom: 12px;
+            font-weight: 400;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 1px solid #0f3460;
+            padding-bottom: 8px;
+        }
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            font-size: 13px;
+        }
+        .stat-label { color: #888; }
+        .stat-value { 
+            color: #fff; 
+            font-family: 'Consolas', monospace;
+        }
+        .stat-value.good { color: #00ff88; }
+        .stat-value.warning { color: #ffaa00; }
+        .stat-value.error { color: #ff4444; }
+        .mode-indicator {
+            text-align: center;
+            padding: 8px;
+            border-radius: 6px;
+            font-weight: 500;
+            margin-bottom: 10px;
+        }
+        .mode-cueing { background: #3a506b; color: #fff; }
+        .mode-acquiring { background: #8b4513; color: #fff; }
+        .mode-tracking { background: #0a5c36; color: #00ff88; }
+        .mode-lost { background: #8b0000; color: #ff6666; }
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        button {
+            flex: 1;
+            min-width: 80px;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        button.primary {
+            background: #00d4ff;
+            color: #000;
+        }
+        button.primary:hover { background: #00a8cc; }
+        button.secondary {
+            background: #0f3460;
+            color: #fff;
+        }
+        button.secondary:hover { background: #1a4a7a; }
+        button.danger {
+            background: #8b0000;
+            color: #fff;
+        }
+        button.danger:hover { background: #a00000; }
+        .slider-group {
+            margin-bottom: 12px;
+        }
+        .slider-group label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            margin-bottom: 4px;
+            color: #888;
+        }
+        .slider-group input[type="range"] {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #0f3460;
+            outline: none;
+            -webkit-appearance: none;
+        }
+        .slider-group input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #00d4ff;
+            cursor: pointer;
+        }
+        .latency-bar {
+            height: 8px;
+            background: #0f3460;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 4px;
+        }
+        .latency-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00d4ff, #00ff88);
+            transition: width 0.1s;
+        }
+        .legend {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+            font-size: 11px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>PTZ Camera Aircraft Tracking Simulation</h1>
+        
+        <div class="main-grid">
+            <div class="views">
+                <div class="view-panel">
+                    <h3>Camera View (FOV: 10° × 7.5°)</h3>
+                    <canvas id="cameraView" width="500" height="375"></canvas>
+                    <div class="legend">
+                        <div class="legend-item"><div class="legend-color" style="background:#00ff88"></div>Aircraft</div>
+                        <div class="legend-item"><div class="legend-color" style="background:#ff6600"></div>OpenCV Detection</div>
+                        <div class="legend-item"><div class="legend-color" style="background:#ff0066"></div>Crosshairs</div>
+                    </div>
+                </div>
+                
+                <div class="view-panel">
+                    <h3>Top-Down View (Overhead)</h3>
+                    <canvas id="topView" width="500" height="375"></canvas>
+                    <div class="legend">
+                        <div class="legend-item"><div class="legend-color" style="background:#00ff88"></div>Aircraft</div>
+                        <div class="legend-item"><div class="legend-color" style="background:#00d4ff"></div>Camera</div>
+                        <div class="legend-item"><div class="legend-color" style="background:rgba(0,212,255,0.3)"></div>FOV Cone</div>
+                    </div>
+                </div>
+                
+                <div class="view-panel" style="grid-column: span 2;">
+                    <h3>Time History</h3>
+                    <canvas id="historyView" width="1030" height="200"></canvas>
+                    <div class="legend">
+                        <div class="legend-item"><div class="legend-color" style="background:#ff6666"></div>Pan Error</div>
+                        <div class="legend-item"><div class="legend-color" style="background:#66ff66"></div>Tilt Error</div>
+                        <div class="legend-item"><div class="legend-color" style="background:#6666ff"></div>Pan Rate Cmd</div>
+                        <div class="legend-item"><div class="legend-color" style="background:#ffff66"></div>Tilt Rate Cmd</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="side-panel">
+                <div class="panel">
+                    <h3>System Status</h3>
+                    <div id="modeIndicator" class="mode-indicator mode-cueing">CUEING</div>
+                    <div class="stat-row">
+                        <span class="stat-label">Simulation Time</span>
+                        <span class="stat-value" id="simTime">0.00 s</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Aircraft Range</span>
+                        <span class="stat-value" id="range">0 m</span>
+                    </div>
+                </div>
+                
+                <div class="panel">
+                    <h3>Camera State</h3>
+                    <div class="stat-row">
+                        <span class="stat-label">Pan Angle</span>
+                        <span class="stat-value" id="panAngle">0.00°</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Tilt Angle</span>
+                        <span class="stat-value" id="tiltAngle">0.00°</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Pan Rate</span>
+                        <span class="stat-value" id="panRate">0.00 °/s</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Tilt Rate</span>
+                        <span class="stat-value" id="tiltRate">0.00 °/s</span>
+                    </div>
+                </div>
+                
+                <div class="panel">
+                    <h3>Tracking Error</h3>
+                    <div class="stat-row">
+                        <span class="stat-label">Pixel Error X</span>
+                        <span class="stat-value" id="errorX">0 px</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Pixel Error Y</span>
+                        <span class="stat-value" id="errorY">0 px</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Angular Error</span>
+                        <span class="stat-value" id="angularError">0.00°</span>
+                    </div>
+                </div>
+                
+                <div class="panel">
+                    <h3>PID Output</h3>
+                    <div class="stat-row">
+                        <span class="stat-label">Pan Command</span>
+                        <span class="stat-value" id="panCmd">0.00 °/s</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Tilt Command</span>
+                        <span class="stat-value" id="tiltCmd">0.00 °/s</span>
+                    </div>
+                </div>
+                
+                <div class="panel">
+                    <h3>Latency Pipeline</h3>
+                    <div style="font-size: 12px; color: #888; margin-bottom: 8px;">OpenCV Detection (500ms)</div>
+                    <div class="latency-bar">
+                        <div class="latency-fill" id="opencvLatency" style="width: 0%"></div>
+                    </div>
+                    <div style="font-size: 12px; color: #888; margin: 8px 0 8px;">Camera Response (200ms)</div>
+                    <div class="latency-bar">
+                        <div class="latency-fill" id="cameraLatency" style="width: 0%"></div>
+                    </div>
+                </div>
+                
+                <div class="panel">
+                    <h3>PID Tuning</h3>
+                    <div class="slider-group">
+                        <label><span>Kp (Proportional)</span><span id="kpVal">2.0</span></label>
+                        <input type="range" id="kpSlider" min="0" max="5" step="0.1" value="2.0">
+                    </div>
+                    <div class="slider-group">
+                        <label><span>Ki (Integral)</span><span id="kiVal">0.1</span></label>
+                        <input type="range" id="kiSlider" min="0" max="1" step="0.01" value="0.1">
+                    </div>
+                    <div class="slider-group">
+                        <label><span>Kd (Derivative)</span><span id="kdVal">0.8</span></label>
+                        <input type="range" id="kdSlider" min="0" max="2" step="0.05" value="0.8">
+                    </div>
+                </div>
+                
+                <div class="panel">
+                    <h3>Controls</h3>
+                    <div class="controls">
+                        <button id="startBtn" class="primary">Start</button>
+                        <button id="resetBtn" class="secondary">Reset</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============ CONSTANTS ============
+        const CAMERA_FOV_H = 10;  // degrees
+        const CAMERA_FOV_V = 7.5; // degrees
+        const OPENCV_LATENCY = 500;  // ms
+        const CAMERA_LATENCY = 200;  // ms
+        const CAMERA_MAX_RATE = 90;  // deg/s
+        const CAMERA_MAX_ACCEL = 180; // deg/s^2
+        const ADSB_UPDATE_RATE = 1000; // ms
+        const IMAGE_WIDTH = 500;
+        const IMAGE_HEIGHT = 375;
+        const DT = 16; // ms (~60fps)
+
+        // ============ STATE ============
+        let state = {
+            running: false,
+            time: 0,
+            
+            // Aircraft state (NED coordinates, camera at origin)
+            aircraft: {
+                n: 8000, e: -5000, d: -3000, // north, east, down (negative = up)
+                vn: -80, ve: 120, vd: 0       // velocities m/s
+            },
+            
+            // Camera state
+            camera: {
+                pan: 0, tilt: 0,           // current angles (pan=azimuth, tilt=elevation)
+                panRate: 0, tiltRate: 0,   // current rates
+                cmdPanRate: 0, cmdTiltRate: 0 // commanded rates (target after latency)
+            },
+            
+            // Command queue for camera latency
+            commandQueue: [],
+            
+            // OpenCV measurement queue
+            measurementQueue: [],
+            lastMeasurement: null,
+            
+            // PID state
+            pid: {
+                integralX: 0, integralY: 0,
+                prevErrorX: 0, prevErrorY: 0,
+                Kp: 2.0, Ki: 0.1, Kd: 0.8
+            },
+            
+            // ADS-B state
+            lastAdsbTime: -Infinity,
+            adsbPosition: null,
+            
+            // Mode
+            mode: 'cueing', // 'cueing', 'acquiring', 'tracking', 'lost'
+            
+            // History for plotting
+            history: {
+                time: [],
+                panError: [],
+                tiltError: [],
+                panRateCmd: [],
+                tiltRateCmd: []
+            }
+        };
+
+        // ============ CANVAS CONTEXTS ============
+        const cameraCanvas = document.getElementById('cameraView');
+        const topCanvas = document.getElementById('topView');
+        const historyCanvas = document.getElementById('historyView');
+        const cameraCtx = cameraCanvas.getContext('2d');
+        const topCtx = topCanvas.getContext('2d');
+        const historyCtx = historyCanvas.getContext('2d');
+
+        // ============ MATH UTILITIES ============
+        function toRad(deg) { return deg * Math.PI / 180; }
+        function toDeg(rad) { return rad * 180 / Math.PI; }
+        
+        function clamp(val, min, max) {
+            return Math.max(min, Math.min(max, val));
+        }
+
+        // Get aircraft angles relative to camera pointing direction
+        function getAircraftAngles() {
+            const { n, e, d } = state.aircraft;
+            const range = Math.sqrt(n*n + e*e + d*d);
+            const groundRange = Math.sqrt(n*n + e*e);
+            
+            // True azimuth and elevation
+            const azimuth = toDeg(Math.atan2(e, n));  // pan angle
+            const elevation = toDeg(Math.atan2(-d, groundRange)); // tilt angle (negative d = positive elevation)
+            
+            return { azimuth, elevation, range };
+        }
+
+        // Convert aircraft position to pixel coordinates in camera view
+        function aircraftToPixel() {
+            const { azimuth, elevation } = getAircraftAngles();
+            const { pan, tilt } = state.camera;
+            
+            // Error in degrees
+            const panError = azimuth - pan;
+            const tiltError = elevation - tilt;
+            
+            // Convert to pixels
+            const pixelsPerDegH = IMAGE_WIDTH / CAMERA_FOV_H;
+            const pixelsPerDegV = IMAGE_HEIGHT / CAMERA_FOV_V;
+            
+            const px = IMAGE_WIDTH/2 + panError * pixelsPerDegH;
+            const py = IMAGE_HEIGHT/2 - tiltError * pixelsPerDegV; // invert Y
+            
+            return { px, py, panError, tiltError };
+        }
+
+        // Check if aircraft is in FOV
+        function isInFOV() {
+            const { px, py } = aircraftToPixel();
+            return px >= 0 && px <= IMAGE_WIDTH && py >= 0 && py <= IMAGE_HEIGHT;
+        }
+
+        // ============ SIMULATION STEP ============
+        function simulate(dt) {
+            const dtSec = dt / 1000;
+            
+            // 1. Update aircraft position
+            state.aircraft.n += state.aircraft.vn * dtSec;
+            state.aircraft.e += state.aircraft.ve * dtSec;
+            state.aircraft.d += state.aircraft.vd * dtSec;
+            
+            // 2. ADS-B update (every second)
+            if (state.time - state.lastAdsbTime >= ADSB_UPDATE_RATE) {
+                state.adsbPosition = { ...state.aircraft };
+                state.lastAdsbTime = state.time;
+                
+                // If in cueing mode, slew camera to ADS-B position
+                if (state.mode === 'cueing' || state.mode === 'lost') {
+                    const { azimuth, elevation } = getAircraftAngles();
+                    // Fast slew to position
+                    const panError = azimuth - state.camera.pan;
+                    const tiltError = elevation - state.camera.tilt;
+                    
+                    // Command maximum rate toward target
+                    const slew = 60; // deg/s
+                    state.camera.cmdPanRate = clamp(panError * 5, -slew, slew);
+                    state.camera.cmdTiltRate = clamp(tiltError * 5, -slew, slew);
+                    
+                    // Check if close enough to switch to acquiring
+                    if (Math.abs(panError) < CAMERA_FOV_H/2 && Math.abs(tiltError) < CAMERA_FOV_V/2) {
+                        state.mode = 'acquiring';
+                    }
+                }
+            }
+            
+            // 3. OpenCV "detection" - simulate with latency
+            // Push current true position into measurement queue
+            if (isInFOV()) {
+                const { px, py, panError, tiltError } = aircraftToPixel();
+                state.measurementQueue.push({
+                    time: state.time + OPENCV_LATENCY,
+                    px, py, panError, tiltError,
+                    valid: true
+                });
+            } else {
+                state.measurementQueue.push({
+                    time: state.time + OPENCV_LATENCY,
+                    valid: false
+                });
+            }
+            
+            // Process measurements that have "arrived"
+            while (state.measurementQueue.length > 0 && state.measurementQueue[0].time <= state.time) {
+                state.lastMeasurement = state.measurementQueue.shift();
+            }
+            
+            // 4. PID Control (when in tracking mode and have measurement)
+            if (state.lastMeasurement && state.lastMeasurement.valid) {
+                if (state.mode === 'acquiring') {
+                    state.mode = 'tracking';
+                    // Reset PID integrators
+                    state.pid.integralX = 0;
+                    state.pid.integralY = 0;
+                }
+                
+                if (state.mode === 'tracking') {
+                    const { px, py } = state.lastMeasurement;
+                    const centerX = IMAGE_WIDTH / 2;
+                    const centerY = IMAGE_HEIGHT / 2;
+                    
+                    // Error in pixels
+                    const errorX = px - centerX;
+                    const errorY = centerY - py; // invert Y
+                    
+                    // Convert to degrees
+                    const pixelsPerDegH = IMAGE_WIDTH / CAMERA_FOV_H;
+                    const pixelsPerDegV = IMAGE_HEIGHT / CAMERA_FOV_V;
+                    const errorPanDeg = errorX / pixelsPerDegH;
+                    const errorTiltDeg = errorY / pixelsPerDegV;
+                    
+                    // PID
+                    const { Kp, Ki, Kd } = state.pid;
+                    
+                    // Integral (with anti-windup)
+                    state.pid.integralX = clamp(state.pid.integralX + errorPanDeg * dtSec, -10, 10);
+                    state.pid.integralY = clamp(state.pid.integralY + errorTiltDeg * dtSec, -10, 10);
+                    
+                    // Derivative
+                    const derivX = (errorPanDeg - state.pid.prevErrorX) / dtSec;
+                    const derivY = (errorTiltDeg - state.pid.prevErrorY) / dtSec;
+                    state.pid.prevErrorX = errorPanDeg;
+                    state.pid.prevErrorY = errorTiltDeg;
+                    
+                    // Output
+                    let panCmd = Kp * errorPanDeg + Ki * state.pid.integralX + Kd * derivX;
+                    let tiltCmd = Kp * errorTiltDeg + Ki * state.pid.integralY + Kd * derivY;
+                    
+                    // Clamp to max rate
+                    panCmd = clamp(panCmd, -CAMERA_MAX_RATE, CAMERA_MAX_RATE);
+                    tiltCmd = clamp(tiltCmd, -CAMERA_MAX_RATE, CAMERA_MAX_RATE);
+                    
+                    // Queue command with latency
+                    state.commandQueue.push({
+                        time: state.time + CAMERA_LATENCY,
+                        panRate: panCmd,
+                        tiltRate: tiltCmd
+                    });
+                    
+                    // Record history
+                    if (state.history.time.length > 500) {
+                        state.history.time.shift();
+                        state.history.panError.shift();
+                        state.history.tiltError.shift();
+                        state.history.panRateCmd.shift();
+                        state.history.tiltRateCmd.shift();
+                    }
+                    state.history.time.push(state.time / 1000);
+                    state.history.panError.push(errorPanDeg);
+                    state.history.tiltError.push(errorTiltDeg);
+                    state.history.panRateCmd.push(panCmd);
+                    state.history.tiltRateCmd.push(tiltCmd);
+                }
+            } else if (state.lastMeasurement && !state.lastMeasurement.valid && state.mode === 'tracking') {
+                // Lost track
+                state.mode = 'lost';
+            }
+            
+            // 5. Process command queue (camera latency)
+            while (state.commandQueue.length > 0 && state.commandQueue[0].time <= state.time) {
+                const cmd = state.commandQueue.shift();
+                state.camera.cmdPanRate = cmd.panRate;
+                state.camera.cmdTiltRate = cmd.tiltRate;
+            }
+            
+            // 6. Camera dynamics - accelerate toward commanded rate
+            const maxAccel = CAMERA_MAX_ACCEL * dtSec;
+            
+            let panRateDiff = state.camera.cmdPanRate - state.camera.panRate;
+            state.camera.panRate += clamp(panRateDiff, -maxAccel, maxAccel);
+            
+            let tiltRateDiff = state.camera.cmdTiltRate - state.camera.tiltRate;
+            state.camera.tiltRate += clamp(tiltRateDiff, -maxAccel, maxAccel);
+            
+            // Update camera position
+            state.camera.pan += state.camera.panRate * dtSec;
+            state.camera.tilt += state.camera.tiltRate * dtSec;
+            
+            // Clamp camera angles
+            state.camera.tilt = clamp(state.camera.tilt, -10, 90);
+            
+            // Update time
+            state.time += dt;
+        }
+
+        // ============ RENDERING ============
+        function drawCameraView() {
+            const ctx = cameraCtx;
+            ctx.fillStyle = '#1a1a3a';
+            ctx.fillRect(0, 0, IMAGE_WIDTH, IMAGE_HEIGHT);
+            
+            // Draw grid
+            ctx.strokeStyle = '#333355';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= 10; i++) {
+                const x = i * IMAGE_WIDTH / 10;
+                const y = i * IMAGE_HEIGHT / 10;
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, IMAGE_HEIGHT);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(IMAGE_WIDTH, y);
+                ctx.stroke();
+            }
+            
+            // Draw crosshairs
+            ctx.strokeStyle = '#ff0066';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.moveTo(IMAGE_WIDTH/2, 0);
+            ctx.lineTo(IMAGE_WIDTH/2, IMAGE_HEIGHT);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(0, IMAGE_HEIGHT/2);
+            ctx.lineTo(IMAGE_WIDTH, IMAGE_HEIGHT/2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // Draw center circle
+            ctx.beginPath();
+            ctx.arc(IMAGE_WIDTH/2, IMAGE_HEIGHT/2, 30, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Draw aircraft (true position)
+            const { px, py } = aircraftToPixel();
+            if (px >= -20 && px <= IMAGE_WIDTH + 20 && py >= -20 && py <= IMAGE_HEIGHT + 20) {
+                ctx.fillStyle = '#00ff88';
+                ctx.beginPath();
+                ctx.arc(px, py, 8, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Aircraft icon
+                ctx.save();
+                ctx.translate(px, py);
+                const heading = Math.atan2(state.aircraft.ve, state.aircraft.vn);
+                ctx.rotate(-heading + Math.PI/2);
+                ctx.fillStyle = '#00cc66';
+                ctx.beginPath();
+                ctx.moveTo(0, -12);
+                ctx.lineTo(-6, 8);
+                ctx.lineTo(0, 4);
+                ctx.lineTo(6, 8);
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+            }
+            
+            // Draw OpenCV detection (delayed position)
+            if (state.lastMeasurement && state.lastMeasurement.valid) {
+                ctx.strokeStyle = '#ff6600';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.rect(state.lastMeasurement.px - 25, state.lastMeasurement.py - 25, 50, 50);
+                ctx.stroke();
+                
+                // Detection label
+                ctx.fillStyle = '#ff6600';
+                ctx.font = '12px monospace';
+                ctx.fillText('OPENCV', state.lastMeasurement.px - 22, state.lastMeasurement.py - 30);
+            }
+            
+            // Mode label
+            ctx.fillStyle = '#fff';
+            ctx.font = '14px monospace';
+            ctx.fillText(`Mode: ${state.mode.toUpperCase()}`, 10, 25);
+            
+            // FOV label
+            ctx.fillStyle = '#888';
+            ctx.font = '12px monospace';
+            ctx.fillText(`Center: ${state.camera.pan.toFixed(1)}° Az, ${state.camera.tilt.toFixed(1)}° El`, 10, IMAGE_HEIGHT - 10);
+        }
+
+        function drawTopView() {
+            const ctx = topCtx;
+            ctx.fillStyle = '#1a1a3a';
+            ctx.fillRect(0, 0, 500, 375);
+            
+            // Scale: 100 pixels = 5000 meters
+            const scale = 100 / 5000;
+            const cx = 250;
+            const cy = 280;
+            
+            // Draw grid
+            ctx.strokeStyle = '#333355';
+            ctx.lineWidth = 1;
+            for (let r = 2000; r <= 12000; r += 2000) {
+                ctx.beginPath();
+                ctx.arc(cx, cy, r * scale, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+            
+            // Range labels
+            ctx.fillStyle = '#555';
+            ctx.font = '10px monospace';
+            for (let r = 2000; r <= 10000; r += 2000) {
+                ctx.fillText(`${r/1000}km`, cx + r * scale + 5, cy);
+            }
+            
+            // Draw camera FOV cone
+            const panRad = toRad(state.camera.pan);
+            const halfFov = toRad(CAMERA_FOV_H / 2);
+            const fovDist = 12000 * scale;
+            
+            ctx.fillStyle = 'rgba(0, 212, 255, 0.15)';
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx + Math.sin(panRad - halfFov) * fovDist, cy - Math.cos(panRad - halfFov) * fovDist);
+            ctx.lineTo(cx + Math.sin(panRad + halfFov) * fovDist, cy - Math.cos(panRad + halfFov) * fovDist);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Draw FOV edges
+            ctx.strokeStyle = '#00d4ff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx + Math.sin(panRad - halfFov) * fovDist, cy - Math.cos(panRad - halfFov) * fovDist);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx + Math.sin(panRad + halfFov) * fovDist, cy - Math.cos(panRad + halfFov) * fovDist);
+            ctx.stroke();
+            
+            // Draw center line
+            ctx.strokeStyle = '#00d4ff';
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx + Math.sin(panRad) * fovDist, cy - Math.cos(panRad) * fovDist);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // Draw camera
+            ctx.fillStyle = '#00d4ff';
+            ctx.beginPath();
+            ctx.arc(cx, cy, 8, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw aircraft
+            const ax = cx + state.aircraft.e * scale;
+            const ay = cy - state.aircraft.n * scale;
+            
+            ctx.fillStyle = '#00ff88';
+            ctx.beginPath();
+            ctx.arc(ax, ay, 6, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw aircraft velocity vector
+            const vscale = 20;
+            ctx.strokeStyle = '#00ff88';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(ax, ay);
+            ctx.lineTo(ax + state.aircraft.ve * scale * vscale, ay - state.aircraft.vn * scale * vscale);
+            ctx.stroke();
+            
+            // Draw aircraft trail
+            ctx.strokeStyle = 'rgba(0, 255, 136, 0.3)';
+            ctx.lineWidth = 1;
+            const trailLen = 200;
+            ctx.beginPath();
+            ctx.moveTo(ax - state.aircraft.ve * scale * trailLen, ay + state.aircraft.vn * scale * trailLen);
+            ctx.lineTo(ax, ay);
+            ctx.stroke();
+            
+            // Labels
+            ctx.fillStyle = '#fff';
+            ctx.font = '12px monospace';
+            ctx.fillText('N', cx - 4, 20);
+            ctx.fillText('Camera', cx - 25, cy + 25);
+            
+            // Aircraft info
+            const { range, azimuth, elevation } = getAircraftAngles();
+            ctx.fillStyle = '#00ff88';
+            ctx.fillText(`Aircraft`, ax + 10, ay - 25);
+            ctx.font = '10px monospace';
+            ctx.fillText(`Az: ${azimuth.toFixed(1)}°  El: ${elevation.toFixed(1)}°`, ax + 10, ay - 12);
+            ctx.fillText(`Range: ${(range/1000).toFixed(1)} km`, ax + 10, ay + 2);
+        }
+
+        function drawHistory() {
+            const ctx = historyCtx;
+            ctx.fillStyle = '#1a1a3a';
+            ctx.fillRect(0, 0, 1030, 200);
+            
+            if (state.history.time.length < 2) return;
+            
+            const w = 1030;
+            const h = 200;
+            const margin = 40;
+            
+            // Draw axes
+            ctx.strokeStyle = '#555';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(margin, h/2);
+            ctx.lineTo(w - 10, h/2);
+            ctx.stroke();
+            
+            // Y-axis labels
+            ctx.fillStyle = '#888';
+            ctx.font = '10px monospace';
+            ctx.fillText('5°', 5, 30);
+            ctx.fillText('0', 10, h/2 + 4);
+            ctx.fillText('-5°', 5, h - 20);
+            
+            // Scale
+            const times = state.history.time;
+            const minT = times[0];
+            const maxT = times[times.length - 1];
+            const timeRange = Math.max(maxT - minT, 1);
+            
+            const xScale = (w - margin - 10) / timeRange;
+            const yScale = (h - 40) / 10; // ±5 degrees
+            
+            // Helper to draw line
+            function drawLine(data, color) {
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                for (let i = 0; i < data.length; i++) {
+                    const x = margin + (times[i] - minT) * xScale;
+                    const y = h/2 - data[i] * yScale;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+            }
+            
+            // Draw data
+            drawLine(state.history.panError, '#ff6666');
+            drawLine(state.history.tiltError, '#66ff66');
+            
+            // Scale rate commands for display
+            const panRateScaled = state.history.panRateCmd.map(v => v / 10);
+            const tiltRateScaled = state.history.tiltRateCmd.map(v => v / 10);
+            ctx.globalAlpha = 0.5;
+            drawLine(panRateScaled, '#6666ff');
+            drawLine(tiltRateScaled, '#ffff66');
+            ctx.globalAlpha = 1.0;
+        }
+
+        function updateUI() {
+            const { range, azimuth, elevation } = getAircraftAngles();
+            const { px, py, panError, tiltError } = aircraftToPixel();
+            
+            document.getElementById('simTime').textContent = (state.time / 1000).toFixed(2) + ' s';
+            document.getElementById('range').textContent = (range / 1000).toFixed(2) + ' km';
+            
+            document.getElementById('panAngle').textContent = state.camera.pan.toFixed(2) + '°';
+            document.getElementById('tiltAngle').textContent = state.camera.tilt.toFixed(2) + '°';
+            document.getElementById('panRate').textContent = state.camera.panRate.toFixed(2) + ' °/s';
+            document.getElementById('tiltRate').textContent = state.camera.tiltRate.toFixed(2) + ' °/s';
+            
+            const errX = document.getElementById('errorX');
+            const errY = document.getElementById('errorY');
+            const angErr = document.getElementById('angularError');
+            
+            if (state.lastMeasurement && state.lastMeasurement.valid) {
+                const ex = (state.lastMeasurement.px - IMAGE_WIDTH/2).toFixed(0);
+                const ey = (IMAGE_HEIGHT/2 - state.lastMeasurement.py).toFixed(0);
+                errX.textContent = ex + ' px';
+                errY.textContent = ey + ' px';
+                
+                const totalErr = Math.sqrt(panError*panError + tiltError*tiltError);
+                angErr.textContent = totalErr.toFixed(2) + '°';
+                
+                errX.className = 'stat-value ' + (Math.abs(ex) < 50 ? 'good' : Math.abs(ex) < 150 ? 'warning' : 'error');
+                errY.className = 'stat-value ' + (Math.abs(ey) < 50 ? 'good' : Math.abs(ey) < 150 ? 'warning' : 'error');
+            } else {
+                errX.textContent = '--';
+                errY.textContent = '--';
+                angErr.textContent = '--';
+                errX.className = 'stat-value';
+                errY.className = 'stat-value';
+            }
+            
+            document.getElementById('panCmd').textContent = state.camera.cmdPanRate.toFixed(2) + ' °/s';
+            document.getElementById('tiltCmd').textContent = state.camera.cmdTiltRate.toFixed(2) + ' °/s';
+            
+            // Mode indicator
+            const modeEl = document.getElementById('modeIndicator');
+            modeEl.textContent = state.mode.toUpperCase();
+            modeEl.className = 'mode-indicator mode-' + state.mode;
+            
+            // Latency bars (visual representation)
+            const ocvProgress = (state.measurementQueue.length > 0) ? 
+                ((state.time - (state.measurementQueue[0].time - OPENCV_LATENCY)) / OPENCV_LATENCY * 100) : 0;
+            const camProgress = (state.commandQueue.length > 0) ? 
+                ((state.time - (state.commandQueue[0].time - CAMERA_LATENCY)) / CAMERA_LATENCY * 100) : 0;
+            
+            document.getElementById('opencvLatency').style.width = Math.min(100, Math.max(0, ocvProgress)) + '%';
+            document.getElementById('cameraLatency').style.width = Math.min(100, Math.max(0, camProgress)) + '%';
+        }
+
+        // ============ MAIN LOOP ============
+        let lastTime = 0;
+        function loop(timestamp) {
+            if (state.running) {
+                simulate(DT);
+            }
+            
+            drawCameraView();
+            drawTopView();
+            drawHistory();
+            updateUI();
+            
+            requestAnimationFrame(loop);
+        }
+
+        // ============ RESET ============
+        function reset() {
+            state = {
+                running: false,
+                time: 0,
+                aircraft: {
+                    n: 8000, e: -5000, d: -3000,
+                    vn: -80, ve: 120, vd: 0
+                },
+                camera: {
+                    pan: 0, tilt: 0,
+                    panRate: 0, tiltRate: 0,
+                    cmdPanRate: 0, cmdTiltRate: 0
+                },
+                commandQueue: [],
+                measurementQueue: [],
+                lastMeasurement: null,
+                pid: {
+                    integralX: 0, integralY: 0,
+                    prevErrorX: 0, prevErrorY: 0,
+                    Kp: parseFloat(document.getElementById('kpSlider').value),
+                    Ki: parseFloat(document.getElementById('kiSlider').value),
+                    Kd: parseFloat(document.getElementById('kdSlider').value)
+                },
+                lastAdsbTime: -Infinity,
+                adsbPosition: null,
+                mode: 'cueing',
+                history: {
+                    time: [],
+                    panError: [],
+                    tiltError: [],
+                    panRateCmd: [],
+                    tiltRateCmd: []
+                }
+            };
+            document.getElementById('startBtn').textContent = 'Start';
+        }
+
+        // ============ EVENT HANDLERS ============
+        document.getElementById('startBtn').addEventListener('click', () => {
+            state.running = !state.running;
+            document.getElementById('startBtn').textContent = state.running ? 'Pause' : 'Start';
+        });
+
+        document.getElementById('resetBtn').addEventListener('click', reset);
+
+        // PID sliders
+        document.getElementById('kpSlider').addEventListener('input', (e) => {
+            state.pid.Kp = parseFloat(e.target.value);
+            document.getElementById('kpVal').textContent = e.target.value;
+        });
+
+        document.getElementById('kiSlider').addEventListener('input', (e) => {
+            state.pid.Ki = parseFloat(e.target.value);
+            document.getElementById('kiVal').textContent = e.target.value;
+        });
+
+        document.getElementById('kdSlider').addEventListener('input', (e) => {
+            state.pid.Kd = parseFloat(e.target.value);
+            document.getElementById('kdVal').textContent = e.target.value;
+        });
+
+        // Start
+        requestAnimationFrame(loop);
+    </script>
+</body>
+</html>
