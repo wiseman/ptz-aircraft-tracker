@@ -665,13 +665,17 @@
         }
 
         // Quantize speed to 8-bit resolution over [-60, 60] range
-        function quantizeSpeed(speed) {
-            // 8-bit unsigned integer range: 0 to 255
-            // Map [-60, 60] to [0, 255]
+        function quantizeSpeed(speed, num_bits) {
+            // Handle 0 speed case
+            if (speed === 0) {
+                return 0;
+            }
+            // num_bits-bit unsigned integer range: 0 to 2^num_bits - 1
+            // Map [-60, 60] to [0, 2^num_bits - 1]
             const minSpeed = -60;
             const maxSpeed = 60;
             const range = maxSpeed - minSpeed;
-            const steps = 255; // 2^8 - 1
+            const steps = Math.pow(2, num_bits) - 1;
             
             // Normalize to 0-1
             let normalized = (speed - minSpeed) / range;
@@ -852,9 +856,9 @@
             panCmd = clamp(panCmd, -CAMERA_MAX_RATE, CAMERA_MAX_RATE);
             tiltCmd = clamp(tiltCmd, -CAMERA_MAX_RATE, CAMERA_MAX_RATE);
             
-            // Quantize speed (Simulate 8-bit resolution)
-            panCmd = quantizeSpeed(panCmd);
-            tiltCmd = quantizeSpeed(tiltCmd);
+            // Quantize speed
+            panCmd = quantizeSpeed(panCmd, 6);
+            tiltCmd = quantizeSpeed(tiltCmd, 6);
             
             // Queue command with latency
             state.commandQueue.push({
