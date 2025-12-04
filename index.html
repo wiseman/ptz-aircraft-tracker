@@ -304,6 +304,10 @@
                             <div class="latency-fill" id="cameraLatency" style="width: 0%"></div>
                         </div>
                     </div>
+                    <div class="slider-group">
+                        <label><span>Motion Prediction</span><span id="predictionVal">0 ms</span></label>
+                        <input type="range" id="predictionSlider" min="0" max="1000" step="10" value="0">
+                    </div>
                 </div>
 
                 <div class="panel">
@@ -351,6 +355,7 @@
         const CAMERA_FOV_V = 7.5; // degrees
         let OPENCV_LATENCY = 500;  // ms
         let CAMERA_LATENCY = 200;  // ms
+        let PREDICTION_TIME = 0;   // ms
         const CAMERA_MAX_RATE = 90;  // deg/s
         let CAMERA_MAX_PAN_ACCEL = 180; // deg/s^2
         let CAMERA_MAX_TILT_ACCEL = 180; // deg/s^2
@@ -383,6 +388,7 @@
             // OpenCV measurement queue
             measurementQueue: [],
             lastMeasurement: null,
+            estimatedRate: { az: 0, el: 0 },
             
             // PID state
             pid: {
@@ -481,21 +487,36 @@
             // Push current true position into measurement queue
             if (isInFOV()) {
                 const { px, py, panError, tiltError } = aircraftToPixel();
+                const { azimuth, elevation } = getAircraftAngles();
                 state.measurementQueue.push({
                     time: state.time + OPENCV_LATENCY,
+                    captureTime: state.time,
                     px, py, panError, tiltError,
+                    azimuth, elevation,
                     valid: true
                 });
             } else {
                 state.measurementQueue.push({
                     time: state.time + OPENCV_LATENCY,
+                    captureTime: state.time,
                     valid: false
                 });
             }
             
             // Process measurements that have "arrived"
             while (state.measurementQueue.length > 0 && state.measurementQueue[0].time <= state.time) {
-                state.lastMeasurement = state.measurementQueue.shift();
+                const newMeas = state.measurementQueue.shift();
+                
+                // Calculate rates if we have a previous valid measurement
+                if (newMeas.valid && state.lastMeasurement && state.lastMeasurement.valid) {
+                    const dtMeas = (newMeas.captureTime - state.lastMeasurement.captureTime) / 1000;
+                    if (dtMeas > 0) {
+                        state.estimatedRate.az = (newMeas.azimuth - state.lastMeasurement.azimuth) / dtMeas;
+                        state.estimatedRate.el = (newMeas.elevation - state.lastMeasurement.elevation) / dtMeas;
+                    }
+                }
+                
+                state.lastMeasurement = newMeas;
             }
             
             // 4. Determine tracking mode
@@ -513,20 +534,20 @@
             let errorTiltDeg = 0;
             
             if (haveOpencvLock) {
-                // Target: center of frame
-                const { px, py } = state.lastMeasurement;
-                const centerX = IMAGE_WIDTH / 2;
-                const centerY = IMAGE_HEIGHT / 2;
+                // Target: Predicted position based on measurement and estimated rate
+                const meas = state.lastMeasurement;
                 
-                // Error in pixels
-                const errorX = px - centerX;
-                const errorY = centerY - py; // invert Y
+                // Time since the frame was captured + prediction lookahead
+                const timeSinceCapture = (state.time - meas.captureTime) / 1000;
+                const totalPrediction = timeSinceCapture + (PREDICTION_TIME / 1000);
                 
-                // Convert to degrees
-                const pixelsPerDegH = IMAGE_WIDTH / CAMERA_FOV_H;
-                const pixelsPerDegV = IMAGE_HEIGHT / CAMERA_FOV_V;
-                errorPanDeg = errorX / pixelsPerDegH;
-                errorTiltDeg = errorY / pixelsPerDegV;
+                // Predict target angles
+                const targetAz = meas.azimuth + state.estimatedRate.az * totalPrediction;
+                const targetEl = meas.elevation + state.estimatedRate.el * totalPrediction;
+                
+                // Calculate error relative to CURRENT camera position
+                errorPanDeg = targetAz - state.camera.pan;
+                errorTiltDeg = targetEl - state.camera.tilt;
             } else if (state.adsbPosition) {
                 // Target: ADS-B reported position
                 const an = state.adsbPosition.n;
@@ -955,6 +976,7 @@
                 commandQueue: [],
                 measurementQueue: [],
                 lastMeasurement: null,
+                estimatedRate: { az: 0, el: 0 },
                 pid: {
                     integralX: 0, integralY: 0,
                     prevErrorX: 0, prevErrorY: 0,
@@ -1009,6 +1031,11 @@
         document.getElementById('cameraLatencySlider').addEventListener('input', (e) => {
             CAMERA_LATENCY = parseInt(e.target.value);
             document.getElementById('cameraLatencyVal').textContent = CAMERA_LATENCY + ' ms';
+        });
+
+        document.getElementById('predictionSlider').addEventListener('input', (e) => {
+            PREDICTION_TIME = parseInt(e.target.value);
+            document.getElementById('predictionVal').textContent = PREDICTION_TIME + ' ms';
         });
 
         document.getElementById('panAccelSlider').addEventListener('input', (e) => {
