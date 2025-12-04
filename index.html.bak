@@ -25,16 +25,6 @@
             z-index: 0;
             display: block;
         }
-        
-        #hudOverlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 1;
-            pointer-events: none;
-        }
 
         /* Overlay UI */
         .overlay-container {
@@ -244,7 +234,6 @@
 <body>
     <!-- 3D Canvas Background -->
     <canvas id="cameraView"></canvas>
-    <canvas id="hudOverlay"></canvas>
     
     <!-- HUD Elements -->
     <div class="crosshair"></div>
@@ -341,10 +330,10 @@
             <div class="panel">
                 <h3>Latency Settings</h3>
                 <div class="slider-group">
-                    <label><span>OpenCV Period</span><span id="opencvPeriodVal">500 ms</span></label>
-                    <input type="range" id="opencvPeriodSlider" min="0" max="500" step="10" value="500">
+                    <label><span>OpenCV Latency</span><span id="opencvLatencyVal">500 ms</span></label>
+                    <input type="range" id="opencvLatencySlider" min="0" max="500" step="10" value="500">
                     <div class="latency-bar">
-                        <div class="latency-fill" id="opencvPeriod" style="width: 0%"></div>
+                        <div class="latency-fill" id="opencvLatency" style="width: 0%"></div>
                     </div>
                 </div>
                 <div class="slider-group">
@@ -370,10 +359,6 @@
                     <label><span>Max Tilt Accel</span><span id="tiltAccelVal">180 °/s²</span></label>
                     <input type="range" id="tiltAccelSlider" min="10" max="500" step="10" value="180">
                 </div>
-                <div class="slider-group">
-                    <label><span>Rate Quantization</span><span id="rateQuantVal">16 bits</span></label>
-                    <input type="range" id="rateQuantSlider" min="2" max="16" step="1" value="16">
-                </div>
             </div>
             
             <div class="panel">
@@ -398,15 +383,14 @@
         // ============ CONSTANTS ============
         const CAMERA_FOV_H = 10;  // degrees
         const CAMERA_FOV_V = 7.5; // degrees
-        let OPENCV_PERIOD = 500;  // ms - time to analyze a single frame
-        let CAMERA_PERIOD = 200;  // ms - time to process one command
+        let OPENCV_LATENCY = 500;  // ms
+        let CAMERA_LATENCY = 200;  // ms
         let PREDICTION_TIME = 0;   // ms
-        const CAMERA_MAX_RATE = 60;  // deg/s
+        const CAMERA_MAX_RATE = 90;  // deg/s
         let CAMERA_MAX_PAN_ACCEL = 180; // deg/s^2
         let CAMERA_MAX_TILT_ACCEL = 180; // deg/s^2
         const ADSB_UPDATE_RATE = 5000; // ms
         const DT = 16; // ms (~60fps)
-        let CAMERA_RATE_BITS = 16; // bits for rate quantization
 
         // ============ THREE.JS SETUP ============
         let scene, camera, renderer;
@@ -414,10 +398,8 @@
         
         function initThreeJS() {
             scene = new THREE.Scene();
-            // Daylight Sky Color
-            scene.background = new THREE.Color(0x87CEEB); 
-            // Fog matches sky for depth
-            scene.fog = new THREE.Fog(0x87CEEB, 2000, 40000);
+            scene.background = new THREE.Color(0x050510);
+            scene.fog = new THREE.Fog(0x050510, 2000, 20000);
 
             // Camera
             const aspect = window.innerWidth / window.innerHeight;
@@ -428,104 +410,38 @@
             renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.shadowMap.enabled = true; // Enable shadows
 
             // Lighting
-            // Bright ambient light (skylight)
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            const ambientLight = new THREE.AmbientLight(0x404040, 2);
             scene.add(ambientLight);
-            
-            // Sun light
-            const dirLight = new THREE.DirectionalLight(0xffdfba, 1.2);
-            dirLight.position.set(5000, 10000, 5000);
-            dirLight.castShadow = true;
-            dirLight.shadow.camera.top = 10000;
-            dirLight.shadow.camera.bottom = -10000;
-            dirLight.shadow.camera.left = -10000;
-            dirLight.shadow.camera.right = 10000;
-            dirLight.shadow.camera.near = 0.1;
-            dirLight.shadow.camera.far = 50000;
-            dirLight.shadow.mapSize.width = 2048;
-            dirLight.shadow.mapSize.height = 2048;
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+            dirLight.position.set(100, 1000, 100);
             scene.add(dirLight);
 
-            // Ground
-            const groundGeo = new THREE.PlaneGeometry(100000, 100000);
-            const groundMat = new THREE.MeshLambertMaterial({ color: 0x3b7d3b }); // Grass Green
-            const ground = new THREE.Mesh(groundGeo, groundMat);
-            ground.rotation.x = -Math.PI / 2;
-            ground.position.y = -2000; // Keep original ground level
-            ground.receiveShadow = true;
-            scene.add(ground);
-
-            // Grid (Optional, make it subtle)
+            // Ground Grid
             const gridSize = 20000;
             const gridDivisions = 40;
-            groundGrid = new THREE.GridHelper(gridSize, gridDivisions, 0xffffff, 0xffffff);
-            groundGrid.position.set(0, -1990, 0); // Slightly above ground
-            groundGrid.material.opacity = 0.2;
-            groundGrid.material.transparent = true;
+            groundGrid = new THREE.GridHelper(gridSize, gridDivisions, 0x333355, 0x111122);
+            // Three.js coords: X=Right, Y=Up, Z=Back
+            // We want ground at Y=-2000 (since we are at 0,0,0 looking down)
+            groundGrid.position.set(0, -2000, 0); 
             scene.add(groundGrid);
-
-            // Clouds
-            createClouds();
 
             // Aircraft Model
             const geometry = new THREE.ConeGeometry(5, 20, 8);
             geometry.rotateX(Math.PI / 2); // Point along Z initially
-            const material = new THREE.MeshPhongMaterial({ color: 0xeeeeee, emissive: 0x222222 }); // White fuselage
+            const material = new THREE.MeshPhongMaterial({ color: 0x00ff88, emissive: 0x004422 });
             aircraftMesh = new THREE.Mesh(geometry, material);
-            aircraftMesh.castShadow = true;
             
             // Add wings
             const wingGeo = new THREE.BoxGeometry(30, 1, 6);
             const wingMesh = new THREE.Mesh(wingGeo, material);
-            wingMesh.castShadow = true;
             aircraftMesh.add(wingMesh);
             
             scene.add(aircraftMesh);
             
             // Resize handler
             window.addEventListener('resize', onWindowResize, false);
-        }
-
-        function createClouds() {
-            const cloudGeo = new THREE.SphereGeometry(1, 7, 7);
-            const cloudMat = new THREE.MeshLambertMaterial({ 
-                color: 0xffffff, 
-                transparent: true, 
-                opacity: 0.8,
-                flatShading: true
-            });
-
-            // Create a few cloud clusters
-            for (let i = 0; i < 50; i++) {
-                const cloudGroup = new THREE.Group();
-                
-                // Random position for the cluster
-                const x = (Math.random() - 0.5) * 40000;
-                const z = (Math.random() - 0.5) * 40000;
-                const y = 2000 + Math.random() * 3000; // Altitude
-
-                cloudGroup.position.set(x, y, z);
-
-                // Puffs within the cluster
-                const nPuffs = 3 + Math.floor(Math.random() * 5);
-                for (let j = 0; j < nPuffs; j++) {
-                    const puff = new THREE.Mesh(cloudGeo, cloudMat);
-                    puff.position.set(
-                        (Math.random() - 0.5) * 200,
-                        (Math.random() - 0.5) * 50,
-                        (Math.random() - 0.5) * 100
-                    );
-                    const scale = 50 + Math.random() * 100;
-                    puff.scale.set(scale, scale * 0.6, scale);
-                    puff.rotation.z = Math.random() * Math.PI;
-                    puff.rotation.y = Math.random() * Math.PI;
-                    cloudGroup.add(puff);
-                }
-                scene.add(cloudGroup);
-            }
         }
 
         function onWindowResize() {
@@ -645,21 +561,11 @@
 
         // ============ CANVAS CONTEXTS ============
         // const cameraCanvas = document.getElementById('cameraView'); // Handled by Three.js
-        const hudCanvas = document.getElementById('hudOverlay');
         const topCanvas = document.getElementById('topView');
         const historyCanvas = document.getElementById('historyView');
         // const cameraCtx = cameraCanvas.getContext('2d'); // Removed
-        const hudCtx = hudCanvas.getContext('2d');
         const topCtx = topCanvas.getContext('2d');
         const historyCtx = historyCanvas.getContext('2d');
-
-        // Resize HUD canvas
-        function resizeHUD() {
-            hudCanvas.width = window.innerWidth;
-            hudCanvas.height = window.innerHeight;
-        }
-        window.addEventListener('resize', resizeHUD);
-        resizeHUD();
 
         // ============ MATH UTILITIES ============
         function toRad(deg) { return deg * Math.PI / 180; }
@@ -667,30 +573,6 @@
         
         function clamp(val, min, max) {
             return Math.max(min, Math.min(max, val));
-        }
-
-        // Quantize speed to 8-bit resolution over [-60, 60] range
-        function quantizeSpeed(speed, num_bits) {
-            // Handle 0 speed case
-            if (speed === 0) {
-                return 0;
-            }
-            // num_bits-bit unsigned integer range: 0 to 2^num_bits - 1
-            // Map [-60, 60] to [0, 2^num_bits - 1]
-            const minSpeed = -60;
-            const maxSpeed = 60;
-            const range = maxSpeed - minSpeed;
-            const steps = Math.pow(2, num_bits) - 1;
-            
-            // Normalize to 0-1
-            let normalized = (speed - minSpeed) / range;
-            normalized = clamp(normalized, 0, 1);
-            
-            // Quantize
-            const quantizedStep = Math.round(normalized * steps);
-            
-            // De-normalize back to speed
-            return (quantizedStep / steps) * range + minSpeed;
         }
 
         // Get aircraft angles relative to camera pointing direction
@@ -758,13 +640,13 @@
                 state.lastAdsbTime = state.time;
             }
             
-            // 3. OpenCV "detection" - simulate with period (frame analysis time)
+            // 3. OpenCV "detection" - simulate with latency
             // Push current true position into measurement queue
             if (isInFOV()) {
                 const { px, py, panError, tiltError } = aircraftToPixel();
                 const { azimuth, elevation } = getAircraftAngles();
                 state.measurementQueue.push({
-                    time: state.time + OPENCV_PERIOD,
+                    time: state.time + OPENCV_LATENCY,
                     captureTime: state.time,
                     px, py, panError, tiltError,
                     azimuth, elevation,
@@ -772,7 +654,7 @@
                 });
             } else {
                 state.measurementQueue.push({
-                    time: state.time + OPENCV_PERIOD,
+                    time: state.time + OPENCV_LATENCY,
                     captureTime: state.time,
                     valid: false
                 });
@@ -861,13 +743,9 @@
             panCmd = clamp(panCmd, -CAMERA_MAX_RATE, CAMERA_MAX_RATE);
             tiltCmd = clamp(tiltCmd, -CAMERA_MAX_RATE, CAMERA_MAX_RATE);
             
-            // Quantize speed
-            panCmd = quantizeSpeed(panCmd, CAMERA_RATE_BITS);
-            tiltCmd = quantizeSpeed(tiltCmd, CAMERA_RATE_BITS);
-            
             // Queue command with latency
             state.commandQueue.push({
-                time: state.time + CAMERA_PERIOD,
+                time: state.time + CAMERA_LATENCY,
                 panRate: panCmd,
                 tiltRate: tiltCmd
             });
@@ -917,60 +795,13 @@
         // ============ RENDERING ============
         // drawCameraView is replaced by updateThreeJS
 
-        function drawHUD() {
-            const ctx = hudCtx;
-            const w = hudCanvas.width;
-            const h = hudCanvas.height;
-            
-            ctx.clearRect(0, 0, w, h);
-            
-            // Draw OpenCV detection (delayed position)
-            if (state.lastMeasurement && state.lastMeasurement.valid) {
-                // Calculate screen position based on angular difference
-                // We use the same projection logic as the 3D camera (Perspective)
-                // For small FOV, linear approximation is fine.
-                // Scale = pixels per degree
-                const scale = h / CAMERA_FOV_V;
-                
-                const dAz = state.lastMeasurement.azimuth - state.camera.pan;
-                const dEl = state.lastMeasurement.elevation - state.camera.tilt;
-                
-                // Wrap azimuth error
-                let panError = dAz;
-                while (panError > 180) panError -= 360;
-                while (panError < -180) panError += 360;
-                
-                const cx = w / 2;
-                const cy = h / 2;
-                
-                const x = cx + panError * scale;
-                const y = cy - dEl * scale;
-                
-                // Draw box
-                ctx.strokeStyle = '#ff6600';
-                ctx.lineWidth = 3;
-                ctx.beginPath();
-                // Box size should also scale? Or fixed pixel size?
-                // Original was 50px on 500px width (10% width).
-                // Let's make it proportional or fixed. Fixed is usually better for trackers.
-                const boxSize = 60; 
-                ctx.rect(x - boxSize/2, y - boxSize/2, boxSize, boxSize);
-                ctx.stroke();
-                
-                // Detection label
-                ctx.fillStyle = '#ff6600';
-                ctx.font = '14px monospace';
-                ctx.fillText('OPENCV', x - boxSize/2 + 2, y - boxSize/2 - 8);
-            }
-        }
-
         function drawTopView() {
             const ctx = topCtx;
             ctx.fillStyle = '#1a1a3a';
             ctx.fillRect(0, 0, 300, 300);
             
-            // Scale: 300 pixels = 20000 meters (zoomed out a bit)
-            const scale = 300 / 20000;
+            // Scale: 300 pixels = 10000 meters (zoomed out a bit)
+            const scale = 300 / 10000;
             const cx = 150;
             const cy = 150;
             
@@ -986,7 +817,7 @@
             // Draw camera FOV cone
             const panRad = toRad(state.camera.pan);
             const halfFov = toRad(CAMERA_FOV_H / 2);
-            const fovDist = 10000 * scale;
+            const fovDist = 5000 * scale;
             
             ctx.fillStyle = 'rgba(0, 212, 255, 0.15)';
             ctx.beginPath();
@@ -1011,7 +842,14 @@
             ctx.arc(ax, ay, 4, 0, Math.PI * 2);
             ctx.fill();
             
-            // Velocity vector removed for cleaner view
+            // Draw aircraft velocity vector
+            const vscale = 20;
+            ctx.strokeStyle = '#00ff88';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(ax, ay);
+            ctx.lineTo(ax + state.aircraft.ve * scale * vscale, ay - state.aircraft.vn * scale * vscale);
+            ctx.stroke();
         }
 
         function drawHistory() {
@@ -1118,11 +956,11 @@
             
             // Latency bars
             const ocvProgress = (state.measurementQueue.length > 0) ? 
-                ((state.time - (state.measurementQueue[0].time - OPENCV_PERIOD)) / OPENCV_PERIOD * 100) : 0;
+                ((state.time - (state.measurementQueue[0].time - OPENCV_LATENCY)) / OPENCV_LATENCY * 100) : 0;
             const camProgress = (state.commandQueue.length > 0) ? 
-                ((state.time - (state.commandQueue[0].time - CAMERA_PERIOD)) / CAMERA_PERIOD * 100) : 0;
+                ((state.time - (state.commandQueue[0].time - CAMERA_LATENCY)) / CAMERA_LATENCY * 100) : 0;
             
-            document.getElementById('opencvPeriod').style.width = Math.min(100, Math.max(0, ocvProgress)) + '%';
+            document.getElementById('opencvLatency').style.width = Math.min(100, Math.max(0, ocvProgress)) + '%';
             document.getElementById('cameraLatency').style.width = Math.min(100, Math.max(0, camProgress)) + '%';
         }
 
@@ -1133,7 +971,6 @@
             }
             
             updateThreeJS(); // Render 3D scene
-            drawHUD();
             drawTopView();
             drawHistory();
             updateUI();
@@ -1205,19 +1042,14 @@
         });
 
         // Latency and Dynamics Sliders
-        document.getElementById('opencvPeriodSlider').addEventListener('input', (e) => {
-            OPENCV_PERIOD = parseInt(e.target.value);
-            document.getElementById('opencvPeriodVal').textContent = OPENCV_PERIOD + ' ms';
-        });
-
-        document.getElementById('rateQuantSlider').addEventListener('input', (e) => {
-            CAMERA_RATE_BITS = parseInt(e.target.value);
-            document.getElementById('rateQuantVal').textContent = CAMERA_RATE_BITS + ' bits';
+        document.getElementById('opencvLatencySlider').addEventListener('input', (e) => {
+            OPENCV_LATENCY = parseInt(e.target.value);
+            document.getElementById('opencvLatencyVal').textContent = OPENCV_LATENCY + ' ms';
         });
 
         document.getElementById('cameraLatencySlider').addEventListener('input', (e) => {
-            CAMERA_PERIOD = parseInt(e.target.value);
-            document.getElementById('cameraLatencyVal').textContent = CAMERA_PERIOD + ' ms';
+            CAMERA_LATENCY = parseInt(e.target.value);
+            document.getElementById('cameraLatencyVal').textContent = CAMERA_LATENCY + ' ms';
         });
 
         document.getElementById('predictionSlider').addEventListener('input', (e) => {
