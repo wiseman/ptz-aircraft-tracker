@@ -28,6 +28,7 @@
             display: grid;
             grid-template-columns: 1fr 300px;
             gap: 20px;
+            align-items: start;
         }
         .views {
             display: grid;
@@ -52,6 +53,7 @@
             width: 100%;
             border-radius: 8px;
             background: #0a0a1a;
+            display: block;
         }
         .side-panel {
             display: flex;
@@ -287,14 +289,32 @@
                 </div>
                 
                 <div class="panel">
-                    <h3>Latency Pipeline</h3>
-                    <div style="font-size: 12px; color: #888; margin-bottom: 8px;">OpenCV Detection (500ms)</div>
-                    <div class="latency-bar">
-                        <div class="latency-fill" id="opencvLatency" style="width: 0%"></div>
+                    <h3>Latency Settings</h3>
+                    <div class="slider-group">
+                        <label><span>OpenCV Latency</span><span id="opencvLatencyVal">500 ms</span></label>
+                        <input type="range" id="opencvLatencySlider" min="0" max="500" step="10" value="500">
+                        <div class="latency-bar">
+                            <div class="latency-fill" id="opencvLatency" style="width: 0%"></div>
+                        </div>
                     </div>
-                    <div style="font-size: 12px; color: #888; margin: 8px 0 8px;">Camera Response (200ms)</div>
-                    <div class="latency-bar">
-                        <div class="latency-fill" id="cameraLatency" style="width: 0%"></div>
+                    <div class="slider-group">
+                        <label><span>Camera Latency</span><span id="cameraLatencyVal">200 ms</span></label>
+                        <input type="range" id="cameraLatencySlider" min="0" max="500" step="10" value="200">
+                        <div class="latency-bar">
+                            <div class="latency-fill" id="cameraLatency" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h3>Camera Dynamics</h3>
+                    <div class="slider-group">
+                        <label><span>Max Pan Accel</span><span id="panAccelVal">180 °/s²</span></label>
+                        <input type="range" id="panAccelSlider" min="10" max="500" step="10" value="180">
+                    </div>
+                    <div class="slider-group">
+                        <label><span>Max Tilt Accel</span><span id="tiltAccelVal">180 °/s²</span></label>
+                        <input type="range" id="tiltAccelSlider" min="10" max="500" step="10" value="180">
                     </div>
                 </div>
                 
@@ -329,10 +349,11 @@
         // ============ CONSTANTS ============
         const CAMERA_FOV_H = 10;  // degrees
         const CAMERA_FOV_V = 7.5; // degrees
-        const OPENCV_LATENCY = 500;  // ms
-        const CAMERA_LATENCY = 200;  // ms
+        let OPENCV_LATENCY = 500;  // ms
+        let CAMERA_LATENCY = 200;  // ms
         const CAMERA_MAX_RATE = 90;  // deg/s
-        const CAMERA_MAX_ACCEL = 180; // deg/s^2
+        let CAMERA_MAX_PAN_ACCEL = 180; // deg/s^2
+        let CAMERA_MAX_TILT_ACCEL = 180; // deg/s^2
         const ADSB_UPDATE_RATE = 5000; // ms
         const IMAGE_WIDTH = 500;
         const IMAGE_HEIGHT = 375;
@@ -569,13 +590,14 @@
             }
             
             // 6. Camera dynamics - accelerate toward commanded rate
-            const maxAccel = CAMERA_MAX_ACCEL * dtSec;
+            const maxPanAccel = CAMERA_MAX_PAN_ACCEL * dtSec;
+            const maxTiltAccel = CAMERA_MAX_TILT_ACCEL * dtSec;
             
             let panRateDiff = state.camera.cmdPanRate - state.camera.panRate;
-            state.camera.panRate += clamp(panRateDiff, -maxAccel, maxAccel);
+            state.camera.panRate += clamp(panRateDiff, -maxPanAccel, maxPanAccel);
             
             let tiltRateDiff = state.camera.cmdTiltRate - state.camera.tiltRate;
-            state.camera.tiltRate += clamp(tiltRateDiff, -maxAccel, maxAccel);
+            state.camera.tiltRate += clamp(tiltRateDiff, -maxTiltAccel, maxTiltAccel);
             
             // Update camera position
             state.camera.pan += state.camera.panRate * dtSec;
@@ -976,6 +998,27 @@
         document.getElementById('kdSlider').addEventListener('input', (e) => {
             state.pid.Kd = parseFloat(e.target.value);
             document.getElementById('kdVal').textContent = e.target.value;
+        });
+
+        // Latency and Dynamics Sliders
+        document.getElementById('opencvLatencySlider').addEventListener('input', (e) => {
+            OPENCV_LATENCY = parseInt(e.target.value);
+            document.getElementById('opencvLatencyVal').textContent = OPENCV_LATENCY + ' ms';
+        });
+
+        document.getElementById('cameraLatencySlider').addEventListener('input', (e) => {
+            CAMERA_LATENCY = parseInt(e.target.value);
+            document.getElementById('cameraLatencyVal').textContent = CAMERA_LATENCY + ' ms';
+        });
+
+        document.getElementById('panAccelSlider').addEventListener('input', (e) => {
+            CAMERA_MAX_PAN_ACCEL = parseInt(e.target.value);
+            document.getElementById('panAccelVal').textContent = CAMERA_MAX_PAN_ACCEL + ' °/s²';
+        });
+
+        document.getElementById('tiltAccelSlider').addEventListener('input', (e) => {
+            CAMERA_MAX_TILT_ACCEL = parseInt(e.target.value);
+            document.getElementById('tiltAccelVal').textContent = CAMERA_MAX_TILT_ACCEL + ' °/s²';
         });
 
         // Start
