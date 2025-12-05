@@ -239,6 +239,71 @@
             pointer-events: none;
             z-index: 4;
         }
+
+        /* Info Icon and Tooltip */
+        .info-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 16px;
+            background: #00d4ff;
+            color: #000;
+            border-radius: 50%;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 8px;
+            cursor: help;
+            position: relative;
+        }
+
+        .tooltip {
+            visibility: hidden;
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(15, 52, 96, 0.95);
+            border: 1px solid #00d4ff;
+            padding: 10px;
+            border-radius: 8px;
+            width: 280px;
+            z-index: 100;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            margin-bottom: 10px;
+            opacity: 0;
+            transition: opacity 0.2s, visibility 0.2s;
+            pointer-events: none;
+        }
+
+        .info-icon:hover .tooltip {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        .tooltip h4 {
+            color: #00d4ff;
+            margin-bottom: 8px;
+            font-size: 13px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 4px;
+        }
+
+        .rate-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 4px;
+            font-family: 'Consolas', monospace;
+            font-size: 11px;
+        }
+
+        .rate-item {
+            background: rgba(255,255,255,0.1);
+            padding: 2px 4px;
+            border-radius: 3px;
+            text-align: center;
+            color: #eee;
+        }
     </style>
 </head>
 <body>
@@ -341,15 +406,15 @@
             <div class="panel">
                 <h3>Latency Settings</h3>
                 <div class="slider-group">
-                    <label><span>OpenCV Period</span><span id="opencvPeriodVal">500 ms</span></label>
-                    <input type="range" id="opencvPeriodSlider" min="0" max="500" step="10" value="500">
+                    <label><span>OpenCV Period</span><span id="opencvPeriodVal">200 ms</span></label>
+                    <input type="range" id="opencvPeriodSlider" min="0" max="500" step="10" value="200">
                     <div class="latency-bar">
                         <div class="latency-fill" id="opencvPeriod" style="width: 0%"></div>
                     </div>
                 </div>
                 <div class="slider-group">
-                    <label><span>Camera Latency</span><span id="cameraLatencyVal">200 ms</span></label>
-                    <input type="range" id="cameraLatencySlider" min="0" max="500" step="10" value="200">
+                    <label><span>Camera Latency</span><span id="cameraLatencyVal">500 ms</span></label>
+                    <input type="range" id="cameraLatencySlider" min="0" max="500" step="10" value="500">
                     <div class="latency-bar">
                         <div class="latency-fill" id="cameraLatency" style="width: 0%"></div>
                     </div>
@@ -363,21 +428,35 @@
             <div class="panel">
                 <h3>Camera Dynamics</h3>
                 <div class="slider-group">
-                    <label><span>Max Pan Accel</span><span id="panAccelVal">180 °/s²</span></label>
-                    <input type="range" id="panAccelSlider" min="10" max="500" step="10" value="180">
+                    <label><span>Max Pan Accel</span><span id="panAccelVal">90 °/s²</span></label>
+                    <input type="range" id="panAccelSlider" min="10" max="500" step="10" value="90">
                 </div>
                 <div class="slider-group">
-                    <label><span>Max Tilt Accel</span><span id="tiltAccelVal">180 °/s²</span></label>
-                    <input type="range" id="tiltAccelSlider" min="10" max="500" step="10" value="180">
+                    <label><span>Max Tilt Accel</span><span id="tiltAccelVal">90 °/s²</span></label>
+                    <input type="range" id="tiltAccelSlider" min="10" max="500" step="10" value="90">
                 </div>
                 <div class="slider-group">
                     <label><span>Quantization Mode</span></label>
                     <div style="display: flex; gap: 10px; margin-top: 5px;">
                         <label style="font-weight: normal; color: #fff;">
-                            <input type="radio" name="quantMode" value="linear" checked> Linear
+                            <input type="radio" name="quantMode" value="linear"> Linear
                         </label>
-                        <label style="font-weight: normal; color: #fff;">
-                            <input type="radio" name="quantMode" value="table"> Table
+                        <label style="font-weight: normal; color: #fff; display: flex; align-items: center;">
+                            <input type="radio" name="quantMode" value="table" checked> Table
+                            <span class="info-icon">i
+                                <div class="tooltip">
+                                    <h4>VISCA Rate Table (°/s)</h4>
+                                    <div class="rate-grid">
+                                        <div class="rate-item">0.3</div><div class="rate-item">1.0</div><div class="rate-item">1.5</div><div class="rate-item">2.2</div>
+                                        <div class="rate-item">2.4</div><div class="rate-item">2.6</div><div class="rate-item">2.8</div><div class="rate-item">3.0</div>
+                                        <div class="rate-item">3.2</div><div class="rate-item">3.4</div><div class="rate-item">3.8</div><div class="rate-item">4.5</div>
+                                        <div class="rate-item">6.0</div><div class="rate-item">9.0</div><div class="rate-item">15.0</div><div class="rate-item">19.0</div>
+                                        <div class="rate-item">25.0</div><div class="rate-item">32.0</div><div class="rate-item">38.0</div><div class="rate-item">45.0</div>
+                                        <div class="rate-item">58.0</div><div class="rate-item">75.0</div><div class="rate-item">88.0</div><div class="rate-item">105.0</div>
+                                        <div class="rate-item">120.0</div>
+                                    </div>
+                                </div>
+                            </span>
                         </label>
                     </div>
                 </div>
@@ -409,16 +488,16 @@
         // ============ CONSTANTS ============
         const CAMERA_FOV_H = 10;  // degrees
         const CAMERA_FOV_V = 7.5; // degrees
-        let OPENCV_PERIOD = 500;  // ms - time to analyze a single frame
-        let CAMERA_PERIOD = 200;  // ms - time to process one command
+        let OPENCV_PERIOD = 200;  // ms - time to analyze a single frame
+        let CAMERA_PERIOD = 500;  // ms - time to process one command
         let PREDICTION_TIME = 0;   // ms
         const CAMERA_MAX_RATE = 60;  // deg/s
-        let CAMERA_MAX_PAN_ACCEL = 180; // deg/s^2
-        let CAMERA_MAX_TILT_ACCEL = 180; // deg/s^2
+        let CAMERA_MAX_PAN_ACCEL = 90; // deg/s^2
+        let CAMERA_MAX_TILT_ACCEL = 90; // deg/s^2
         const ADSB_UPDATE_RATE = 5000; // ms
         const DT = 16; // ms (~60fps)
         let CAMERA_RATE_BITS = 16; // bits for rate quantization
-        let RATE_QUANTIZATION_MODE = 'linear'; // 'linear' or 'table'
+        let RATE_QUANTIZATION_MODE = 'table'; // 'linear' or 'table'
         
         // VISCA Pan/Tilt Speed Table
         const QUANTIZATION_TABLE = [
