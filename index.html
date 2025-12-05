@@ -371,6 +371,17 @@
                     <input type="range" id="tiltAccelSlider" min="10" max="500" step="10" value="180">
                 </div>
                 <div class="slider-group">
+                    <label><span>Quantization Mode</span></label>
+                    <div style="display: flex; gap: 10px; margin-top: 5px;">
+                        <label style="font-weight: normal; color: #fff;">
+                            <input type="radio" name="quantMode" value="linear" checked> Linear
+                        </label>
+                        <label style="font-weight: normal; color: #fff;">
+                            <input type="radio" name="quantMode" value="table"> Table
+                        </label>
+                    </div>
+                </div>
+                <div class="slider-group" id="bitDepthControl">
                     <label><span>Rate Quantization</span><span id="rateQuantVal">16 bits</span></label>
                     <input type="range" id="rateQuantSlider" min="2" max="16" step="1" value="16">
                 </div>
@@ -407,6 +418,14 @@
         const ADSB_UPDATE_RATE = 5000; // ms
         const DT = 16; // ms (~60fps)
         let CAMERA_RATE_BITS = 16; // bits for rate quantization
+        let RATE_QUANTIZATION_MODE = 'linear'; // 'linear' or 'table'
+        
+        // VISCA Pan/Tilt Speed Table
+        const QUANTIZATION_TABLE = [
+            0.3, 1.0, 1.5, 2.2, 2.4, 2.6, 2.8, 3.0,
+            3.2, 3.4, 3.8, 4.5, 6.0, 9.0, 15.0, 19.0,
+            25.0, 32.0, 38.0, 45.0, 58.0, 75.0, 88.0, 105.0, 120.0
+        ];
 
         // ============ THREE.JS SETUP ============
         let scene, camera, renderer;
@@ -608,7 +627,8 @@
             camera: {
                 pan: 0, tilt: 0,           // current angles (pan=azimuth, tilt=elevation)
                 panRate: 0, tiltRate: 0,   // current rates
-                cmdPanRate: 0, cmdTiltRate: 0 // commanded rates (target after latency)
+                cmdPanRate: 0, cmdTiltRate: 0, // commanded rates (target after latency)
+                lastCommandTime: -Infinity // Time of last command generation
             },
             
             // Command queue for camera latency
@@ -669,28 +689,48 @@
             return Math.max(min, Math.min(max, val));
         }
 
-        // Quantize speed to 8-bit resolution over [-60, 60] range
+        // Quantize speed
         function quantizeSpeed(speed, num_bits) {
             // Handle 0 speed case
-            if (speed === 0) {
+            if (Math.abs(speed) < 0.001) {
                 return 0;
             }
-            // num_bits-bit unsigned integer range: 0 to 2^num_bits - 1
-            // Map [-60, 60] to [0, 2^num_bits - 1]
-            const minSpeed = -60;
-            const maxSpeed = 60;
-            const range = maxSpeed - minSpeed;
-            const steps = Math.pow(2, num_bits) - 1;
-            
-            // Normalize to 0-1
-            let normalized = (speed - minSpeed) / range;
-            normalized = clamp(normalized, 0, 1);
-            
-            // Quantize
-            const quantizedStep = Math.round(normalized * steps);
-            
-            // De-normalize back to speed
-            return (quantizedStep / steps) * range + minSpeed;
+
+            if (RATE_QUANTIZATION_MODE === 'table') {
+                const absSpeed = Math.abs(speed);
+                const sign = Math.sign(speed);
+                
+                // Find nearest value in table
+                let nearest = QUANTIZATION_TABLE[0];
+                let minDiff = Math.abs(absSpeed - nearest);
+                
+                for (let i = 1; i < QUANTIZATION_TABLE.length; i++) {
+                    const diff = Math.abs(absSpeed - QUANTIZATION_TABLE[i]);
+                    if (diff < minDiff) {
+                        minDiff = diff;
+                        nearest = QUANTIZATION_TABLE[i];
+                    }
+                }
+                return sign * nearest;
+            } else {
+                // Linear quantization
+                // num_bits-bit unsigned integer range: 0 to 2^num_bits - 1
+                // Map [-60, 60] to [0, 2^num_bits - 1]
+                const minSpeed = -60;
+                const maxSpeed = 60;
+                const range = maxSpeed - minSpeed;
+                const steps = Math.pow(2, num_bits) - 1;
+                
+                // Normalize to 0-1
+                let normalized = (speed - minSpeed) / range;
+                normalized = clamp(normalized, 0, 1);
+                
+                // Quantize
+                const quantizedStep = Math.round(normalized * steps);
+                
+                // De-normalize back to speed
+                return (quantizedStep / steps) * range + minSpeed;
+            }
         }
 
         // Get aircraft angles relative to camera pointing direction
@@ -804,87 +844,96 @@
                 state.mode = 'lost';
             }
             
-            // 5. PID Control - always runs, target depends on mode
-            let errorPanDeg = 0;
-            let errorTiltDeg = 0;
-            
-            if (haveOpencvLock) {
-                // Target: Predicted position based on measurement and estimated rate
-                const meas = state.lastMeasurement;
+            // 5. PID Control - Update only when camera is ready for new command (every CAMERA_PERIOD)
+            if (state.time - state.camera.lastCommandTime >= CAMERA_PERIOD) {
+                let dtPID = (state.time - state.camera.lastCommandTime) / 1000;
+                if (!isFinite(dtPID)) dtPID = dtSec; // Fallback for first run
                 
-                // Time since the frame was captured + prediction lookahead
-                const timeSinceCapture = (state.time - meas.captureTime) / 1000;
-                const totalPrediction = timeSinceCapture + (PREDICTION_TIME / 1000);
+                let errorPanDeg = 0;
+                let errorTiltDeg = 0;
                 
-                // Predict target angles
-                const targetAz = meas.azimuth + state.estimatedRate.az * totalPrediction;
-                const targetEl = meas.elevation + state.estimatedRate.el * totalPrediction;
+                if (haveOpencvLock) {
+                    // Target: Predicted position based on measurement and estimated rate
+                    const meas = state.lastMeasurement;
+                    
+                    // Time since the frame was captured + prediction lookahead
+                    const timeSinceCapture = (state.time - meas.captureTime) / 1000;
+                    const totalPrediction = timeSinceCapture + (PREDICTION_TIME / 1000);
+                    
+                    // Predict target angles
+                    const targetAz = meas.azimuth + state.estimatedRate.az * totalPrediction;
+                    const targetEl = meas.elevation + state.estimatedRate.el * totalPrediction;
+                    
+                    // Calculate error relative to CURRENT camera position
+                    errorPanDeg = targetAz - state.camera.pan;
+                    errorTiltDeg = targetEl - state.camera.tilt;
+                } else if (state.adsbPosition) {
+                    // Target: ADS-B reported position
+                    const an = state.adsbPosition.n;
+                    const ae = state.adsbPosition.e;
+                    const ad = state.adsbPosition.d;
+                    const groundRange = Math.sqrt(an*an + ae*ae);
+                    const adsbAzimuth = toDeg(Math.atan2(ae, an));
+                    const adsbElevation = toDeg(Math.atan2(-ad, groundRange));
+                    
+                    errorPanDeg = adsbAzimuth - state.camera.pan;
+                    errorTiltDeg = adsbElevation - state.camera.tilt;
+                }
                 
-                // Calculate error relative to CURRENT camera position
-                errorPanDeg = targetAz - state.camera.pan;
-                errorTiltDeg = targetEl - state.camera.tilt;
-            } else if (state.adsbPosition) {
-                // Target: ADS-B reported position
-                const an = state.adsbPosition.n;
-                const ae = state.adsbPosition.e;
-                const ad = state.adsbPosition.d;
-                const groundRange = Math.sqrt(an*an + ae*ae);
-                const adsbAzimuth = toDeg(Math.atan2(ae, an));
-                const adsbElevation = toDeg(Math.atan2(-ad, groundRange));
+                // Normalize angular error
+                while (errorPanDeg > 180) errorPanDeg -= 360;
+                while (errorPanDeg < -180) errorPanDeg += 360;
                 
-                errorPanDeg = adsbAzimuth - state.camera.pan;
-                errorTiltDeg = adsbElevation - state.camera.tilt;
+                // PID calculation
+                const { Kp, Ki, Kd } = state.pid;
+                
+                // Integral (with anti-windup)
+                state.pid.integralX = clamp(state.pid.integralX + errorPanDeg * dtPID, -10, 10);
+                state.pid.integralY = clamp(state.pid.integralY + errorTiltDeg * dtPID, -10, 10);
+                
+                // Derivative
+                const derivX = (errorPanDeg - state.pid.prevErrorX) / dtPID;
+                const derivY = (errorTiltDeg - state.pid.prevErrorY) / dtPID;
+                state.pid.prevErrorX = errorPanDeg;
+                state.pid.prevErrorY = errorTiltDeg;
+                
+                // Output
+                let panCmd = Kp * errorPanDeg + Ki * state.pid.integralX + Kd * derivX;
+                let tiltCmd = Kp * errorTiltDeg + Ki * state.pid.integralY + Kd * derivY;
+                
+                // Clamp to max rate
+                const maxRate = (RATE_QUANTIZATION_MODE === 'table') ? 120 : CAMERA_MAX_RATE;
+                panCmd = clamp(panCmd, -maxRate, maxRate);
+                tiltCmd = clamp(tiltCmd, -maxRate, maxRate);
+                
+                // Quantize speed
+                panCmd = quantizeSpeed(panCmd, CAMERA_RATE_BITS);
+                tiltCmd = quantizeSpeed(tiltCmd, CAMERA_RATE_BITS);
+                
+                // Queue command with latency
+                state.commandQueue.push({
+                    time: state.time + CAMERA_PERIOD,
+                    panRate: panCmd,
+                    tiltRate: tiltCmd
+                });
+                
+                // Record history
+                if (state.history.time.length > 500) {
+                    state.history.time.shift();
+                    state.history.panError.shift();
+                    state.history.tiltError.shift();
+                    state.history.panRateCmd.shift();
+                    state.history.tiltRateCmd.shift();
+                }
+                state.history.time.push(state.time / 1000);
+                state.history.panError.push(errorPanDeg);
+                state.history.tiltError.push(errorTiltDeg);
+                state.history.panRateCmd.push(panCmd);
+                state.history.tiltRateCmd.push(tiltCmd);
+
+                // Update last command time
+                state.camera.lastCommandTime = state.time;
             }
-            
-            // Normalize angular error
-            while (errorPanDeg > 180) errorPanDeg -= 360;
-            while (errorPanDeg < -180) errorPanDeg += 360;
-            
-            // PID calculation
-            const { Kp, Ki, Kd } = state.pid;
-            
-            // Integral (with anti-windup)
-            state.pid.integralX = clamp(state.pid.integralX + errorPanDeg * dtSec, -10, 10);
-            state.pid.integralY = clamp(state.pid.integralY + errorTiltDeg * dtSec, -10, 10);
-            
-            // Derivative
-            const derivX = (errorPanDeg - state.pid.prevErrorX) / dtSec;
-            const derivY = (errorTiltDeg - state.pid.prevErrorY) / dtSec;
-            state.pid.prevErrorX = errorPanDeg;
-            state.pid.prevErrorY = errorTiltDeg;
-            
-            // Output
-            let panCmd = Kp * errorPanDeg + Ki * state.pid.integralX + Kd * derivX;
-            let tiltCmd = Kp * errorTiltDeg + Ki * state.pid.integralY + Kd * derivY;
-            
-            // Clamp to max rate
-            panCmd = clamp(panCmd, -CAMERA_MAX_RATE, CAMERA_MAX_RATE);
-            tiltCmd = clamp(tiltCmd, -CAMERA_MAX_RATE, CAMERA_MAX_RATE);
-            
-            // Quantize speed
-            panCmd = quantizeSpeed(panCmd, CAMERA_RATE_BITS);
-            tiltCmd = quantizeSpeed(tiltCmd, CAMERA_RATE_BITS);
-            
-            // Queue command with latency
-            state.commandQueue.push({
-                time: state.time + CAMERA_PERIOD,
-                panRate: panCmd,
-                tiltRate: tiltCmd
-            });
-            
-            // Record history
-            if (state.history.time.length > 500) {
-                state.history.time.shift();
-                state.history.panError.shift();
-                state.history.tiltError.shift();
-                state.history.panRateCmd.shift();
-                state.history.tiltRateCmd.shift();
-            }
-            state.history.time.push(state.time / 1000);
-            state.history.panError.push(errorPanDeg);
-            state.history.tiltError.push(errorTiltDeg);
-            state.history.panRateCmd.push(panCmd);
-            state.history.tiltRateCmd.push(tiltCmd);
             
             // 5. Process command queue (camera latency)
             while (state.commandQueue.length > 0 && state.commandQueue[0].time <= state.time) {
@@ -1153,7 +1202,9 @@
                 camera: {
                     pan: 0, tilt: 0,
                     panRate: 0, tiltRate: 0,
-                    cmdPanRate: 0, cmdTiltRate: 0
+                    panRate: 0, tiltRate: 0,
+                    cmdPanRate: 0, cmdTiltRate: 0,
+                    lastCommandTime: -Infinity
                 },
                 commandQueue: [],
                 measurementQueue: [],
@@ -1213,6 +1264,21 @@
         document.getElementById('rateQuantSlider').addEventListener('input', (e) => {
             CAMERA_RATE_BITS = parseInt(e.target.value);
             document.getElementById('rateQuantVal').textContent = CAMERA_RATE_BITS + ' bits';
+        });
+
+        // Quantization Mode Radio Buttons
+        document.querySelectorAll('input[name="quantMode"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                RATE_QUANTIZATION_MODE = e.target.value;
+                const bitDepthControl = document.getElementById('bitDepthControl');
+                if (RATE_QUANTIZATION_MODE === 'table') {
+                    bitDepthControl.style.opacity = '0.3';
+                    bitDepthControl.style.pointerEvents = 'none';
+                } else {
+                    bitDepthControl.style.opacity = '1';
+                    bitDepthControl.style.pointerEvents = 'auto';
+                }
+            });
         });
 
         document.getElementById('cameraLatencySlider').addEventListener('input', (e) => {
