@@ -13,7 +13,6 @@ A realistic 3D simulation of a PTZ (Pan-Tilt-Zoom) camera tracking an aircraft, 
   - **Rate Quantization**: Supports both linear and VISCA table-based rate quantization.
   - **Dynamics**: Adjustable maximum pan/tilt acceleration.
 - **Control System**: Tunable PID controller for tracking performance.
-- **Social Media Ready**: Includes OpenGraph and Twitter Card tags for rich sharing previews.
 
 ## Deployment
 
