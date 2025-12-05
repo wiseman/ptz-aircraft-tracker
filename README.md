@@ -2,6 +2,8 @@
 
 A realistic 3D simulation of a PTZ (Pan-Tilt-Zoom) camera tracking an aircraft, featuring VISCA rate quantization, latency simulation, and PID control.
 
+![Simulation Screenshot](screenshot.png)
+
 ## Features
 
 - **3D Visualization**: Built with Three.js for a realistic representation of the tracking scenario.
