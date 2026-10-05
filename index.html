@@ -60,54 +60,74 @@
             height: 100%;
             z-index: 10;
             pointer-events: none; /* Let clicks pass through to 3D view if needed */
-            padding: 20px;
+            padding: 6px;
             display: grid;
-            grid-template-columns: 350px 1fr 350px;
+            grid-template-columns: 236px 1fr 236px;
             grid-template-rows: auto 1fr auto;
-            gap: 20px;
+            gap: 6px;
+            font-size: 11px;
         }
 
         /* Make panels interactive */
-        .panel, .view-panel, h1 {
+        .panel, .view-panel, .topbar {
             pointer-events: auto;
-            background: rgba(22, 33, 62, 0.85); /* Semi-transparent */
-            backdrop-filter: blur(5px);
+            background: rgba(22, 33, 62, 0.9); /* Semi-transparent */
             border: 1px solid rgba(15, 52, 96, 0.5);
-            border-radius: 12px;
-            padding: 15px;
+            border-radius: 6px;
+            padding: 5px 7px;
         }
 
-        h1 {
+        /* Raise the hovered panel so its tooltip draws over the panels below */
+        .panel { position: relative; }
+        .panel:hover { z-index: 1; }
+
+        .topbar {
             grid-column: 1 / -1;
-            text-align: center;
-            margin: 0;
-            padding: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 4px 7px;
+        }
+        .topbar h1 {
             color: #00d4ff;
-            font-weight: 300;
-            letter-spacing: 2px;
-            font-size: 24px;
-            background: rgba(22, 33, 62, 0.6);
+            font-weight: 400;
+            font-size: 13px;
+            letter-spacing: 1px;
+            white-space: nowrap;
         }
+        .topbar .spacer { flex: 1; }
+        .toggles {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            color: #aaa;
+        }
+        .toggles label {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            color: #ddd;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .toggles input { margin: 0; }
 
-        .left-column {
-            grid-column: 1;
+        /* Hiding the panels leaves only the top bar over the camera view */
+        body.panels-hidden .left-column,
+        body.panels-hidden .right-column,
+        body.panels-hidden .center-bottom { visibility: hidden; }
+
+        .left-column, .right-column {
             grid-row: 2 / -1;
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            gap: 6px;
             overflow-y: auto;
-            max-height: calc(100vh - 80px);
+            overflow-x: hidden;
+            min-height: 0;
         }
-
-        .right-column {
-            grid-column: 3;
-            grid-row: 2 / -1;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            overflow-y: auto;
-            max-height: calc(100vh - 80px);
-        }
+        .left-column { grid-column: 1; }
+        .right-column { grid-column: 3; }
 
         .center-bottom {
             grid-column: 2;
@@ -118,27 +138,26 @@
 
         .view-panel h3, .panel h3 {
             color: #00d4ff;
-            margin-bottom: 10px;
-            font-weight: 400;
-            font-size: 14px;
+            margin-bottom: 3px;
+            font-weight: 500;
+            font-size: 10px;
             text-transform: uppercase;
             letter-spacing: 1px;
-            border-bottom: 1px solid rgba(15, 52, 96, 0.5);
-            padding-bottom: 5px;
         }
 
         canvas.sub-view {
             width: 100%;
-            border-radius: 8px;
+            border-radius: 4px;
             background: rgba(10, 10, 26, 0.5);
             display: block;
         }
+        #topView { aspect-ratio: 1; }
+        #historyView { height: 110px; }
 
         .stat-row {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 6px;
-            font-size: 13px;
+            line-height: 16px;
         }
         .stat-label { color: #aaa; }
         .stat-value { 
@@ -149,68 +168,103 @@
         .stat-value.warning { color: #ffaa00; }
         .stat-value.error { color: #ff4444; }
 
+        /* Pan/tilt readout table */
+        table.readout {
+            width: 100%;
+            border-collapse: collapse;
+            line-height: 16px;
+        }
+        table.readout th {
+            color: #aaa;
+            font-weight: normal;
+            text-align: right;
+        }
+        table.readout td { text-align: right; }
+        table.readout td:first-child, table.readout th:first-child {
+            text-align: left;
+            color: #aaa;
+            font-family: inherit;
+        }
+
         .mode-indicator {
-            text-align: center;
-            padding: 8px;
-            border-radius: 6px;
-            font-weight: 500;
-            margin-bottom: 10px;
+            padding: 0 6px;
+            border-radius: 3px;
+            font-weight: 600;
+            font-size: 10px;
+            letter-spacing: 1px;
+            line-height: 16px;
         }
         .mode-cueing { background: rgba(58, 80, 107, 0.8); color: #fff; }
         .mode-tracking { background: rgba(10, 92, 54, 0.8); color: #00ff88; }
         .mode-lost { background: rgba(139, 0, 0, 0.8); color: #ff6666; }
 
-        .controls {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
         button {
-            flex: 1;
-            min-width: 80px;
-            padding: 10px 15px;
+            padding: 3px 12px;
             border: none;
-            border-radius: 6px;
+            border-radius: 4px;
             cursor: pointer;
-            font-size: 13px;
+            font-size: 11px;
             font-weight: 500;
             transition: all 0.2s;
         }
-        button.primary { background: #00d4ff; color: #000; }
+        button.primary { background: #00d4ff; color: #000; min-width: 52px; }
         button.primary:hover { background: #00a8cc; }
         button.secondary { background: #0f3460; color: #fff; }
         button.secondary:hover { background: #1a4a7a; }
 
-        .slider-group { margin-bottom: 12px; }
-        .slider-group label {
-            display: flex;
-            justify-content: space-between;
-            font-size: 12px;
-            margin-bottom: 4px;
+        /* One-line control: label | input | value */
+        .ctl {
+            display: grid;
+            grid-template-columns: 80px 1fr 56px;
+            align-items: center;
+            gap: 5px;
+            line-height: 18px;
             color: #aaa;
+            white-space: nowrap;
         }
-        .slider-group input[type="range"] {
+        .ctl > :first-child { overflow: hidden; text-overflow: ellipsis; }
+        .ctl > :last-child {
+            text-align: right;
+            color: #fff;
+            font-family: 'Consolas', monospace;
+        }
+        .ctl .choices {
+            grid-column: 2 / -1;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            color: #fff;
+        }
+        .ctl .choices label {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            cursor: pointer;
+        }
+        .ctl input[type="radio"] { margin: 0; }
+        .ctl input[type="range"] {
             width: 100%;
-            height: 6px;
-            border-radius: 3px;
+            min-width: 0;
+            height: 4px;
+            border-radius: 2px;
             background: #0f3460;
             outline: none;
             -webkit-appearance: none;
         }
-        .slider-group input[type="range"]::-webkit-slider-thumb {
+        .ctl input[type="range"]::-webkit-slider-thumb {
             -webkit-appearance: none;
-            width: 14px;
-            height: 14px;
+            width: 10px;
+            height: 10px;
             border-radius: 50%;
             background: #00d4ff;
             cursor: pointer;
         }
         .latency-bar {
-            height: 8px;
+            height: 2px;
             background: #0f3460;
-            border-radius: 4px;
+            border-radius: 1px;
             overflow: hidden;
-            margin-top: 4px;
+            margin-bottom: 2px;
         }
         .latency-fill {
             height: 100%;
@@ -221,86 +275,52 @@
         /* Sensor feed indicator lights; brightness is driven from JS */
         .feed-led {
             display: inline-block;
-            width: 10px;
-            height: 10px;
+            width: 7px;
+            height: 7px;
             border-radius: 50%;
-            margin-right: 8px;
-            vertical-align: -1px;
+            margin-right: 5px;
+            vertical-align: 0;
             opacity: 0.25;
         }
-        .feed-bar {
-            height: 4px;
-            margin: -2px 0 10px;
-        }
+        .feed-bar { margin: 0 0 1px; }
 
         /* Scrollbar styling */
-        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
         ::-webkit-scrollbar-thumb { background: #0f3460; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #1a4a7a; }
         
-        /* Crosshair Overlay (centered on screen) */
-        .crosshair {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 60px;
-            height: 60px;
-            pointer-events: none;
-            z-index: 5;
-        }
-        .crosshair::before, .crosshair::after {
-            content: '';
-            position: absolute;
-            background: rgba(255, 0, 102, 0.6);
-        }
-        .crosshair::before { top: 29px; left: 0; width: 60px; height: 2px; }
-        .crosshair::after { top: 0; left: 29px; width: 2px; height: 60px; }
-        
-        .fov-box {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            width: 200px; /* Arbitrary visual guide */
-            height: 150px;
-            pointer-events: none;
-            z-index: 4;
-        }
-
         /* Info Icon and Tooltip */
         .info-icon {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: 16px;
-            height: 16px;
+            width: 12px;
+            height: 12px;
             background: #00d4ff;
             color: #000;
             border-radius: 50%;
-            font-size: 11px;
+            font-size: 9px;
             font-weight: bold;
-            margin-left: 8px;
+            margin-left: 2px;
             cursor: help;
-            position: relative;
         }
+        .ctl.has-tooltip { position: relative; }
 
         .tooltip {
             visibility: hidden;
             position: absolute;
-            bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(15, 52, 96, 0.95);
+            top: 100%;
+            left: 0;
+            background: rgb(15, 52, 96);
             border: 1px solid #00d4ff;
-            padding: 10px;
-            border-radius: 8px;
-            width: 280px;
+            padding: 6px;
+            text-align: left;
+            border-radius: 4px;
+            width: 100%;
             z-index: 100;
             box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-            margin-bottom: 10px;
+            margin-top: 2px;
             opacity: 0;
             transition: opacity 0.2s, visibility 0.2s;
             pointer-events: none;
@@ -313,8 +333,8 @@
 
         .tooltip h4 {
             color: #00d4ff;
-            margin-bottom: 8px;
-            font-size: 13px;
+            margin-bottom: 4px;
+            font-size: 11px;
             border-bottom: 1px solid rgba(255,255,255,0.1);
             padding-bottom: 4px;
         }
@@ -322,9 +342,9 @@
         .rate-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 4px;
+            gap: 2px;
             font-family: 'Consolas', monospace;
-            font-size: 11px;
+            font-size: 10px;
         }
 
         .rate-item {
@@ -341,30 +361,46 @@
     <canvas id="cameraView"></canvas>
     <canvas id="hudOverlay"></canvas>
     
-    <!-- HUD Elements -->
-    <div class="crosshair"></div>
-    <div class="fov-box"></div>
 
     <!-- UI Overlay -->
     <div class="overlay-container">
-        <h1>PTZ Camera Aircraft Tracking Simulation</h1>
+        <div class="topbar">
+            <h1>PTZ Aircraft Tracking Sim</h1>
+            <button id="startBtn" class="primary">Start</button>
+            <button id="resetBtn" class="secondary">Reset</button>
+            <span class="spacer"></span>
+            <div class="toggles">
+                <span>Show</span>
+                <label><input type="checkbox" id="showAdsb" checked> ADS-B</label>
+                <label><input type="checkbox" id="showOpencv" checked> OpenCV</label>
+                <label><input type="checkbox" id="showKalman" checked> Kalman</label>
+                <label><input type="checkbox" id="showCrosshair" checked> Crosshair</label>
+                <label><input type="checkbox" id="showPanels" checked> Panels</label>
+            </div>
+        </div>
         
         <div class="left-column">
             <div class="panel">
-                <h3>System Status</h3>
-                <div id="modeIndicator" class="mode-indicator mode-cueing">CUEING</div>
                 <div class="stat-row">
-                    <span class="stat-label">Simulation Time</span>
+                    <span id="modeIndicator" class="mode-indicator mode-cueing">CUEING</span>
                     <span class="stat-value" id="simTime">0.00 s</span>
                 </div>
                 <div class="stat-row">
-                    <span class="stat-label">Aircraft Range</span>
+                    <span class="stat-label">Range</span>
                     <span class="stat-value" id="range">0 m</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Line of sight</span>
+                    <span class="stat-value" id="lineOfSight">clear</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Pointing error</span>
+                    <span class="stat-value" id="angularError">--</span>
                 </div>
             </div>
 
             <div class="panel">
-                <h3>Sensor Feeds</h3>
+                <h3>Sensors</h3>
                 <div class="stat-row">
                     <span class="stat-label"><span class="feed-led" id="adsbLed" style="background: #e040fb"></span>ADS-B</span>
                     <span class="stat-value" id="adsbAge">--</span>
@@ -376,120 +412,63 @@
                     <span class="stat-label"><span class="feed-led" id="opencvLed" style="background: #ff6600"></span>OpenCV</span>
                     <span class="stat-value" id="opencvAge">--</span>
                 </div>
+                <div class="stat-row">
+                    <span class="stat-label"><span class="feed-led" style="background: #00e676; opacity: 1"></span>Kalman</span>
+                    <span class="stat-value" id="kfStatus">--</span>
+                </div>
             </div>
 
             <div class="panel">
-                <h3>Camera State</h3>
-                <div class="stat-row">
-                    <span class="stat-label">Pan Angle</span>
-                    <span class="stat-value" id="panAngle">0.00°</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Tilt Angle</span>
-                    <span class="stat-value" id="tiltAngle">0.00°</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Pan Rate</span>
-                    <span class="stat-value" id="panRate">0.00 °/s</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Tilt Rate</span>
-                    <span class="stat-value" id="tiltRate">0.00 °/s</span>
-                </div>
-            </div>
-            
-            <div class="panel">
-                <h3>Tracking Error</h3>
-                <div class="stat-row">
-                    <span class="stat-label">Pixel Error X</span>
-                    <span class="stat-value" id="errorX">0 px</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Pixel Error Y</span>
-                    <span class="stat-value" id="errorY">0 px</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Angular Error</span>
-                    <span class="stat-value" id="angularError">0.00°</span>
-                </div>
+                <h3>Camera</h3>
+                <table class="readout">
+                    <tr><th></th><th>Pan</th><th>Tilt</th></tr>
+                    <tr><td>Angle</td><td class="stat-value" id="panAngle">0.00°</td><td class="stat-value" id="tiltAngle">0.00°</td></tr>
+                    <tr><td>Rate</td><td class="stat-value" id="panRate">0.00 °/s</td><td class="stat-value" id="tiltRate">0.00 °/s</td></tr>
+                    <tr><td>Command</td><td class="stat-value" id="panCmd">0.00 °/s</td><td class="stat-value" id="tiltCmd">0.00 °/s</td></tr>
+                    <tr><td>Error</td><td class="stat-value" id="errorX">--</td><td class="stat-value" id="errorY">--</td></tr>
+                </table>
             </div>
 
             <div class="view-panel">
                 <h3>Top-Down View</h3>
-                <canvas id="topView" class="sub-view" width="300" height="300"></canvas>
+                <canvas id="topView" class="sub-view"></canvas>
             </div>
         </div>
 
         <div class="center-bottom">
             <div class="view-panel" style="width: 100%;">
                 <h3>Time History</h3>
-                <canvas id="historyView" class="sub-view" width="800" height="150"></canvas>
+                <canvas id="historyView" class="sub-view"></canvas>
             </div>
         </div>
 
         <div class="right-column">
             <div class="panel">
-                <h3>Controls</h3>
-                <div class="controls">
-                    <button id="startBtn" class="primary">Start</button>
-                    <button id="resetBtn" class="secondary">Reset</button>
-                </div>
+                <h3>Zoom</h3>
+                <div class="ctl"><span>Optical</span><input type="range" id="opticalZoomSlider" min="1" max="20" step="1" value="4"><span id="opticalZoomVal">4× 10°</span></div>
+                <div class="ctl"><span>Stabilized</span><input type="range" id="stabZoomSlider" min="1" max="8" step="0.5" value="1"><span id="stabZoomVal">off</span></div>
             </div>
 
             <div class="panel">
-                <h3>PID Output</h3>
-                <div class="stat-row">
-                    <span class="stat-label">Pan Command</span>
-                    <span class="stat-value" id="panCmd">0.00 °/s</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Tilt Command</span>
-                    <span class="stat-value" id="tiltCmd">0.00 °/s</span>
-                </div>
-            </div>
-            
-            <div class="panel">
-                <h3>Latency Settings</h3>
-                <div class="slider-group">
-                    <label><span>OpenCV Period</span><span id="opencvPeriodVal">200 ms</span></label>
-                    <input type="range" id="opencvPeriodSlider" min="0" max="500" step="10" value="200">
-                    <div class="latency-bar">
-                        <div class="latency-fill" id="opencvPeriod" style="width: 0%"></div>
-                    </div>
-                </div>
-                <div class="slider-group">
-                    <label><span>Camera Latency</span><span id="cameraLatencyVal">500 ms</span></label>
-                    <input type="range" id="cameraLatencySlider" min="0" max="500" step="10" value="500">
-                    <div class="latency-bar">
-                        <div class="latency-fill" id="cameraLatency" style="width: 0%"></div>
-                    </div>
-                </div>
-                <div class="slider-group">
-                    <label><span>Motion Prediction</span><span id="predictionVal">0 ms</span></label>
-                    <input type="range" id="predictionSlider" min="0" max="1000" step="10" value="0">
-                </div>
+                <h3>Timing</h3>
+                <div class="ctl"><span>CV period</span><input type="range" id="opencvPeriodSlider" min="0" max="500" step="10" value="200"><span id="opencvPeriodVal">200 ms</span></div>
+                <div class="latency-bar"><div class="latency-fill" id="opencvPeriod" style="width: 0%"></div></div>
+                <div class="ctl"><span>Cam latency</span><input type="range" id="cameraLatencySlider" min="0" max="500" step="10" value="500"><span id="cameraLatencyVal">500 ms</span></div>
+                <div class="latency-bar"><div class="latency-fill" id="cameraLatency" style="width: 0%"></div></div>
+                <div class="ctl"><span>Prediction</span><input type="range" id="predictionSlider" min="0" max="1000" step="10" value="0"><span id="predictionVal">0 ms</span></div>
             </div>
 
             <div class="panel">
                 <h3>Camera Dynamics</h3>
-                <div class="slider-group">
-                    <label><span>Max Pan Accel</span><span id="panAccelVal">90 °/s²</span></label>
-                    <input type="range" id="panAccelSlider" min="10" max="500" step="10" value="90">
-                </div>
-                <div class="slider-group">
-                    <label><span>Max Tilt Accel</span><span id="tiltAccelVal">90 °/s²</span></label>
-                    <input type="range" id="tiltAccelSlider" min="10" max="500" step="10" value="90">
-                </div>
-                <div class="slider-group">
-                    <label><span>Quantization Mode</span></label>
-                    <div style="display: flex; gap: 10px; margin-top: 5px;">
-                        <label style="font-weight: normal; color: #fff;">
-                            <input type="radio" name="quantMode" value="linear"> Linear
-                        </label>
-                        <label style="font-weight: normal; color: #fff; display: flex; align-items: center;">
-                            <input type="radio" name="quantMode" value="table" checked> Table
-                            <span class="info-icon">i
-                                <div class="tooltip">
+                <div class="ctl"><span>Pan accel</span><input type="range" id="panAccelSlider" min="10" max="500" step="10" value="90"><span id="panAccelVal">90 °/s²</span></div>
+                <div class="ctl"><span>Tilt accel</span><input type="range" id="tiltAccelSlider" min="10" max="500" step="10" value="90"><span id="tiltAccelVal">90 °/s²</span></div>
+                <div class="ctl has-tooltip">
+                    <span>Rate quant.</span>
+                    <div class="choices">
+                        <label><input type="radio" name="quantMode" value="linear"> Linear</label>
+                        <label><input type="radio" name="quantMode" value="table" checked> VISCA</label>
+                        <span class="info-icon">i
+                            <div class="tooltip">
                                     <h4>VISCA Rate Table (°/s)</h4>
                                     <div class="rate-grid">
                                         <div class="rate-item">0.3</div><div class="rate-item">1.0</div><div class="rate-item">1.5</div><div class="rate-item">2.2</div>
@@ -501,38 +480,54 @@
                                         <div class="rate-item">120.0</div>
                                     </div>
                                 </div>
-                            </span>
-                        </label>
+                        </span>
                     </div>
                 </div>
-                <div class="slider-group" id="bitDepthControl">
-                    <label><span>Rate Quantization</span><span id="rateQuantVal">16 bits</span></label>
-                    <input type="range" id="rateQuantSlider" min="2" max="16" step="1" value="16">
-                </div>
+                <div class="ctl" id="bitDepthControl" style="opacity: 0.3; pointer-events: none"><span>Rate bits</span><input type="range" id="rateQuantSlider" min="2" max="16" step="1" value="16"><span id="rateQuantVal">16 bits</span></div>
             </div>
-            
+
             <div class="panel">
-                <h3>PID Tuning</h3>
-                <div class="slider-group">
-                    <label><span>Kp (Proportional)</span><span id="kpVal">0.8</span></label>
-                    <input type="range" id="kpSlider" min="0" max="5" step="0.1" value="0.8">
+                <h3>Clouds</h3>
+                <div class="ctl"><span>Obscuring</span><input type="range" id="cloudCountSlider" min="0" max="6" step="1" value="3"><span id="cloudCountVal">3</span></div>
+                <div class="ctl"><span>Size</span><input type="range" id="cloudSizeSlider" min="100" max="800" step="50" value="300"><span id="cloudSizeVal">300 m</span></div>
+            </div>
+
+            <div class="panel">
+                <h3>Sensor Noise</h3>
+                <div class="ctl"><span>OpenCV σ</span><input type="range" id="opencvNoiseSlider" min="0" max="10" step="0.5" value="2"><span id="opencvNoiseVal">2 px</span></div>
+                <div class="ctl"><span>ADS-B pos σ</span><input type="range" id="adsbNoiseSlider" min="0" max="200" step="5" value="30"><span id="adsbNoiseVal">30 m</span></div>
+            </div>
+
+            <div class="panel">
+                <h3>Estimator</h3>
+                <div class="ctl">
+                    <span>Drives camera</span>
+                    <div class="choices">
+                        <label><input type="radio" name="estimator" value="kalman" checked> Kalman</label>
+                        <label><input type="radio" name="estimator" value="twopoint"> 2-point</label>
+                    </div>
                 </div>
-                <div class="slider-group">
-                    <label><span>Ki (Integral)</span><span id="kiVal">0.4</span></label>
-                    <input type="range" id="kiSlider" min="0" max="1" step="0.01" value="0.4">
-                </div>
-                <div class="slider-group">
-                    <label><span>Kd (Derivative)</span><span id="kdVal">0.3</span></label>
-                    <input type="range" id="kdSlider" min="0" max="2" step="0.05" value="0.3">
-                </div>
+                <div class="ctl"><span>Process noise</span><input type="range" id="kfQSlider" min="0.5" max="50" step="0.5" value="5"><span id="kfQVal">5 m²/s³</span></div>
+            </div>
+
+            <div class="panel">
+                <h3>PID</h3>
+                <div class="ctl"><span>Kp</span><input type="range" id="kpSlider" min="0" max="5" step="0.1" value="0.8"><span id="kpVal">0.8</span></div>
+                <div class="ctl"><span>Ki</span><input type="range" id="kiSlider" min="0" max="1" step="0.01" value="0.4"><span id="kiVal">0.4</span></div>
+                <div class="ctl"><span>Kd</span><input type="range" id="kdSlider" min="0" max="2" step="0.05" value="0.3"><span id="kdVal">0.3</span></div>
             </div>
         </div>
     </div>
 
     <script>
         // ============ CONSTANTS ============
-        const CAMERA_FOV_H = 10;  // degrees
-        const CAMERA_FOV_V = 7.5; // degrees
+        // Optical zoom sets the field of view; 1× is 40° wide. Display-only stabilized zoom
+        // crops the camera image around the Kalman target (1 = off).
+        const WIDE_FOV_H = 40;    // degrees, at 1× optical zoom
+        let OPTICAL_ZOOM = 4;
+        let CAMERA_FOV_H = WIDE_FOV_H / OPTICAL_ZOOM; // degrees
+        let CAMERA_FOV_V = CAMERA_FOV_H * 0.75;       // degrees (4:3 sensor)
+        let STABILIZED_ZOOM = 1;
         let OPENCV_PERIOD = 200;  // ms - time to analyze a single frame
         let CAMERA_PERIOD = 500;  // ms - time to process one command
         let PREDICTION_TIME = 0;   // ms
@@ -543,10 +538,30 @@
         const DT = 16; // ms (~60fps)
         let CAMERA_RATE_BITS = 16; // bits for rate quantization
         let RATE_QUANTIZATION_MODE = 'table'; // 'linear' or 'table'
+        let OBSCURING_CLOUD_COUNT = 3;   // clouds placed to block the camera's view of the aircraft
+        let OBSCURING_CLOUD_SIZE = 300;  // m, rough radius of each of those clouds
+
+        // Sensor noise
+        let SENSOR_PX_PER_DEG = 500 / CAMERA_FOV_H; // virtual OpenCV sensor (see aircraftToPixel)
+        let OPENCV_NOISE_PX = 2;   // σ of the detection centroid, sensor pixels
+        let ADSB_POS_NOISE = 30;   // σ of ADS-B position error per axis, m
+        const ADSB_VEL_NOISE = 2;  // σ of ADS-B velocity error per axis, m/s
+
+        // Estimator driving the controller: 'kalman', or 'twopoint' (last OpenCV detection
+        // plus a rate from the last two detections; raw ADS-B position when there's no detection)
+        let ESTIMATOR = 'kalman';
+        let KF_PROCESS_NOISE = 5;  // white-acceleration spectral density, m²/s³
+
+        // Aircraft starting state (NED coordinates, camera at origin); it flies a straight line
+        const INITIAL_AIRCRAFT = {
+            n: 8000, e: -5000, d: -3000, // north, east, down (negative = up)
+            vn: -80, ve: 120, vd: 0       // velocities m/s
+        };
 
         // Display colors for the two position sources
         const ADSB_COLOR = '#e040fb';
         const OPENCV_COLOR = '#ff6600';
+        const KF_COLOR = '#00e676';
 
         // VISCA Pan/Tilt Speed Table
         const QUANTIZATION_TABLE = [
@@ -575,7 +590,6 @@
             renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.shadowMap.enabled = true; // Enable shadows
 
             // Lighting
             // Bright ambient light (skylight)
@@ -585,15 +599,6 @@
             // Sun light
             const dirLight = new THREE.DirectionalLight(0xffdfba, 1.2);
             dirLight.position.set(5000, 10000, 5000);
-            dirLight.castShadow = true;
-            dirLight.shadow.camera.top = 10000;
-            dirLight.shadow.camera.bottom = -10000;
-            dirLight.shadow.camera.left = -10000;
-            dirLight.shadow.camera.right = 10000;
-            dirLight.shadow.camera.near = 0.1;
-            dirLight.shadow.camera.far = 50000;
-            dirLight.shadow.mapSize.width = 2048;
-            dirLight.shadow.mapSize.height = 2048;
             scene.add(dirLight);
 
             // Ground
@@ -602,7 +607,6 @@
             const ground = new THREE.Mesh(groundGeo, groundMat);
             ground.rotation.x = -Math.PI / 2;
             ground.position.y = -2000; // Keep original ground level
-            ground.receiveShadow = true;
             scene.add(ground);
 
             // Grid (Optional, make it subtle)
@@ -618,61 +622,115 @@
             createClouds();
 
             // Aircraft Model
-            const geometry = new THREE.ConeGeometry(5, 20, 8);
-            geometry.rotateX(Math.PI / 2); // Point along Z initially
-            const material = new THREE.MeshPhongMaterial({ color: 0xeeeeee, emissive: 0x222222 }); // White fuselage
-            aircraftMesh = new THREE.Mesh(geometry, material);
-            aircraftMesh.castShadow = true;
-            
-            // Add wings
-            const wingGeo = new THREE.BoxGeometry(30, 1, 6);
-            const wingMesh = new THREE.Mesh(wingGeo, material);
-            wingMesh.castShadow = true;
-            aircraftMesh.add(wingMesh);
-            
+            aircraftMesh = createAircraftModel();
             scene.add(aircraftMesh);
             
             // Resize handler
             window.addEventListener('resize', onWindowResize, false);
         }
 
-        function createClouds() {
-            const cloudGeo = new THREE.SphereGeometry(1, 7, 7);
-            const cloudMat = new THREE.MeshLambertMaterial({ 
-                color: 0xffffff, 
-                transparent: true, 
-                opacity: 0.8,
-                flatShading: true
-            });
+        // A generic narrow-body twin jet, roughly A320-sized (38 m long, 34 m span).
+        // Model axes: nose toward +Z, up +Y (what Object3D.lookAt expects), so the
+        // pilot's right is -X.
+        function createAircraftModel() {
+            const aircraft = new THREE.Group();
+            const white = new THREE.MeshPhongMaterial({ color: 0xf2f2f2, emissive: 0x222222, shininess: 60 });
+            const grey = new THREE.MeshPhongMaterial({ color: 0xc4c9cf, emissive: 0x1a1a1a, shininess: 40 });
+            const tailColor = new THREE.MeshPhongMaterial({ color: 0x1e4fa3, emissive: 0x0a1a33 });
+            const dark = new THREE.MeshBasicMaterial({ color: 0x111111 });
 
-            // Create a few cloud clusters
-            for (let i = 0; i < 50; i++) {
-                const cloudGroup = new THREE.Group();
-                
-                // Random position for the cluster
-                const x = (Math.random() - 0.5) * 40000;
-                const z = (Math.random() - 0.5) * 40000;
-                const y = 2000 + Math.random() * 3000; // Altitude
-
-                cloudGroup.position.set(x, y, z);
-
-                // Puffs within the cluster
-                const nPuffs = 3 + Math.floor(Math.random() * 5);
-                for (let j = 0; j < nPuffs; j++) {
-                    const puff = new THREE.Mesh(cloudGeo, cloudMat);
-                    puff.position.set(
-                        (Math.random() - 0.5) * 200,
-                        (Math.random() - 0.5) * 50,
-                        (Math.random() - 0.5) * 100
-                    );
-                    const scale = 50 + Math.random() * 100;
-                    puff.scale.set(scale, scale * 0.6, scale);
-                    puff.rotation.z = Math.random() * Math.PI;
-                    puff.rotation.y = Math.random() * Math.PI;
-                    cloudGroup.add(puff);
-                }
-                scene.add(cloudGroup);
+            function add(geometry, material, x = 0, y = 0, z = 0) {
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(x, y, z);
+                aircraft.add(mesh);
+                return mesh;
             }
+
+            // Flat surface from a planform outline, `thickness` m thick. `plane` is the
+            // plane the outline is drawn in: 'xz' for wings/tailplane (x = span,
+            // second coordinate = fore/aft), 'zy' for the fin (fore/aft, height).
+            function surface(outline, thickness, plane) {
+                const shape = new THREE.Shape(outline.map(([a, b]) => new THREE.Vector2(a, b)));
+                const geometry = new THREE.ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false });
+                geometry.translate(0, 0, -thickness / 2);
+                if (plane === 'xz') geometry.rotateX(Math.PI / 2);  // outline (x, y) -> (x, z)
+                else geometry.rotateY(-Math.PI / 2);                // outline (x, y) -> (z, y)
+                return geometry;
+            }
+
+            // Fuselage: a lathe profile (radius, position along the body) with a rounded
+            // nose and a tapered tail cone, turned so the nose points to +Z
+            const profile = [
+                [0, 18.8], [0.7, 18.4], [1.3, 17.6], [1.75, 16.4], [1.95, 15], [2, 13],
+                [2, -7], [1.85, -10], [1.5, -13], [1.0, -16], [0.5, -18.2], [0.2, -18.8], [0, -18.8]
+            ].map(([r, y]) => new THREE.Vector2(r, y));
+            const fuselage = new THREE.LatheGeometry(profile, 24);
+            fuselage.rotateX(Math.PI / 2);
+            add(fuselage, white);
+
+            // Cockpit windows: a dark band over the top of the nose, just proud of the skin
+            const windshield = new THREE.CylinderGeometry(1.86, 1.93, 0.7, 24, 1, true, -Math.PI * 0.35, Math.PI * 0.7);
+            windshield.rotateX(Math.PI / 2);  // axis along the body; the arc (centered on +Z) now faces down
+            windshield.rotateZ(Math.PI);      // turn the arc to face up
+            add(windshield, dark, 0, 0, 15.7);
+
+            // Wings: swept and tapered, with a few degrees of dihedral
+            for (const side of [1, -1]) {
+                const outline = [[1.8, 3], [17, -4.2], [17, -5.8], [1.8, -4]].map(([x, z]) => [x * side, z]);
+                const wing = add(surface(outline, 0.45, 'xz'), grey, 0, -0.9, 1.5);
+                wing.rotation.z = side * toRad(5);
+            }
+
+            // Horizontal tailplane
+            for (const side of [1, -1]) {
+                const outline = [[0.6, -12.6], [6.3, -16.4], [6.3, -17.6], [0.6, -16.6]].map(([x, z]) => [x * side, z]);
+                add(surface(outline, 0.3, 'xz'), grey, 0, 0.6, 0);
+            }
+
+            // Vertical fin
+            add(surface([[-10.5, 1.2], [-15.8, 7.6], [-17.8, 7.6], [-17.2, 1.2]], 0.35, 'zy'), tailColor);
+
+            // Engines on pylons under the wings, with dark intakes
+            for (const side of [1, -1]) {
+                const x = 5.8 * side;
+                const nacelle = new THREE.CylinderGeometry(0.95, 0.8, 4.4, 16);
+                nacelle.rotateX(Math.PI / 2);
+                add(nacelle, grey, x, -2.1, 3.2);
+                const intake = new THREE.CircleGeometry(0.8, 16);
+                add(intake, dark, x, -2.1, 5.41);
+                add(new THREE.BoxGeometry(0.3, 0.9, 2.6), grey, x, -1.3, 2.2);
+            }
+
+            // Navigation lights: red on the left wingtip, green on the right, white tail
+            const light = color => new THREE.MeshBasicMaterial({ color });
+            const lightGeo = new THREE.SphereGeometry(0.35, 8, 8);
+            add(lightGeo, light(0xff2020), 17, -0.9 + 17 * Math.tan(toRad(5)), -4.6);
+            add(lightGeo, light(0x20ff40), -17, -0.9 + 17 * Math.tan(toRad(5)), -4.6);
+            add(lightGeo, light(0xffffff), 0, 0, -18.9);
+
+            return aircraft;
+        }
+
+        // Meshes for the sim's cloud puffs; rebuilt when the cloud settings change
+        let cloudGroup = null;
+        const cloudGeo = new THREE.SphereGeometry(1, 7, 7);
+        const cloudMat = new THREE.MeshLambertMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.9,
+            flatShading: true
+        });
+
+        function createClouds() {
+            if (cloudGroup) scene.remove(cloudGroup);
+            cloudGroup = new THREE.Group();
+            for (const puff of clouds) {
+                const mesh = new THREE.Mesh(cloudGeo, cloudMat);
+                mesh.position.set(puff.e, -puff.d, -puff.n);
+                mesh.scale.set(puff.rh, puff.rv, puff.rh);
+                cloudGroup.add(mesh);
+            }
+            scene.add(cloudGroup);
         }
 
         function onWindowResize() {
@@ -736,6 +794,16 @@
             // Tilt is Elevation (positive up).
             // So RotX = Tilt.
             camera.rotation.x = toRad(state.camera.tilt);
+
+            // Optical zoom, then the stabilized crop (both update the projection matrix)
+            camera.fov = CAMERA_FOV_V;
+            const w = window.innerWidth, h = window.innerHeight;
+            if (view.zoom > 1) {
+                camera.setViewOffset(w, h, view.cx - w / (2 * view.zoom), view.cy - h / (2 * view.zoom),
+                                     w / view.zoom, h / view.zoom);
+            } else {
+                camera.clearViewOffset();
+            }
             
             renderer.render(scene, camera);
         }
@@ -746,10 +814,8 @@
             time: 0,
             
             // Aircraft state (NED coordinates, camera at origin)
-            aircraft: {
-                n: 8000, e: -5000, d: -3000, // north, east, down (negative = up)
-                vn: -80, ve: 120, vd: 0       // velocities m/s
-            },
+            aircraft: { ...INITIAL_AIRCRAFT },
+            occluded: false, // true when a cloud blocks the camera's line of sight to the aircraft
             
             // Camera state
             camera: {
@@ -780,6 +846,10 @@
             adsbReports: [],             // recent ADS-B reports, oldest first
             lastOpencvArrival: -Infinity, // time the last OpenCV result arrived
 
+            // Kalman filter: {x: [n, e, d, vn, ve, vd], P: 6x6 covariance, t: ms}; null until
+            // the first ADS-B report
+            kf: null,
+
             // Sensor arrival times (s) for the history plot
             events: { adsb: [], opencv: [] },
             
@@ -792,7 +862,8 @@
                 panError: [],
                 tiltError: [],
                 panRateCmd: [],
-                tiltRateCmd: []
+                tiltRateCmd: [],
+                occluded: []
             }
         };
 
@@ -806,13 +877,35 @@
         const topCtx = topCanvas.getContext('2d');
         const historyCtx = historyCanvas.getContext('2d');
 
-        // Resize HUD canvas
-        function resizeHUD() {
+        // Which overlays to draw on the camera view (set by the toggles in the top bar)
+        const overlays = { adsb: true, opencv: true, kalman: true, crosshair: true };
+
+        // Size the canvases to their on-screen size so text and lines stay crisp
+        function resizeCanvases() {
             hudCanvas.width = window.innerWidth;
             hudCanvas.height = window.innerHeight;
+            topCanvas.width = topCanvas.height = topCanvas.clientWidth;
+            historyCanvas.width = historyCanvas.clientWidth;
+            historyCanvas.height = historyCanvas.clientHeight;
         }
-        window.addEventListener('resize', resizeHUD);
-        resizeHUD();
+        window.addEventListener('resize', resizeCanvases);
+        resizeCanvases();
+
+        // The part of the window not covered by panels, for keeping HUD markers visible.
+        // Measured only when the layout changes: reading element positions every frame
+        // forces the browser to redo layout.
+        const clearArea = { left: 0, right: 0, top: 0, bottom: 0 };
+        function updateClearArea() {
+            const rect = sel => document.querySelector(sel).getBoundingClientRect();
+            const w = window.innerWidth, h = window.innerHeight;
+            const panels = !document.body.classList.contains('panels-hidden');
+            clearArea.left = panels ? rect('.left-column').right + 20 : 20;
+            clearArea.right = panels ? rect('.right-column').left - 20 : w - 20;
+            clearArea.top = rect('.topbar').bottom + 20;
+            clearArea.bottom = panels ? rect('.center-bottom').top - 20 : h - 20;
+        }
+        window.addEventListener('resize', updateClearArea);
+        updateClearArea();
 
         // ============ MATH UTILITIES ============
         function toRad(deg) { return deg * Math.PI / 180; }
@@ -926,39 +1019,289 @@
             return px >= 0 && px <= 500 && py >= 0 && py <= 375;
         }
 
+        // ============ CLOUDS ============
+        // Clouds are clusters of ellipsoidal puffs, {n, e, d, rh, rv}: center in NED and
+        // horizontal/vertical radii in m. Three.js renders them, and they block OpenCV's
+        // line of sight to the aircraft.
+        let backgroundClouds = []; // scenery, kept out of the default flight path's line of sight
+        let obscuringClouds = [];  // placed between the camera and the aircraft on purpose
+        let clouds = [];
+
+        // Does the segment from the camera (at the origin) to point p pass through the puff?
+        // `k` scales the puff: the rendered puffs are faceted, so by default the blocking
+        // shape is a bit smaller than the ellipsoid they approximate.
+        function segmentHitsPuff(p, puff, k = 0.95) {
+            // Scale space so the puff is a unit sphere, then solve |s*q - c|^2 = 1 for s
+            const sh = 1 / (puff.rh * k), sv = 1 / (puff.rv * k);
+            const qn = p.n * sh, qe = p.e * sh, qd = p.d * sv;
+            const cn = puff.n * sh, ce = puff.e * sh, cd = puff.d * sv;
+            const a = qn*qn + qe*qe + qd*qd;
+            const b = -2 * (qn*cn + qe*ce + qd*cd);
+            const c = cn*cn + ce*ce + cd*cd - 1;
+            const disc = b*b - 4*a*c;
+            if (disc < 0) return false;
+            const sq = Math.sqrt(disc);
+            // The segment is s in [0, 1]; the puff spans [s1, s2]
+            return (-b - sq) / (2*a) <= 1 && (-b + sq) / (2*a) >= 0;
+        }
+
+        function lineOfSightBlocked(p) {
+            return clouds.some(puff => segmentHitsPuff(p, puff));
+        }
+
+        // Aircraft position t seconds into the default flight
+        function defaultPathAt(t) {
+            const a = INITIAL_AIRCRAFT;
+            return { n: a.n + a.vn * t, e: a.e + a.ve * t, d: a.d + a.vd * t };
+        }
+
+        // Small seeded PRNG (mulberry32) so the obscuring clouds are the same every run
+        function seededRandom(seed) {
+            return function() {
+                seed = seed + 0x6D2B79F5 | 0;
+                let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+                t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+                return ((t ^ t >>> 14) >>> 0) / 4294967296;
+            };
+        }
+
+        // Puffs for one cloud around `center`; `size` is its rough radius (m)
+        function makeCloudCluster(center, size, rand) {
+            const puffs = [{ ...center, rh: size * 0.6, rv: size * 0.36 }];
+            const nPuffs = 4 + Math.floor(rand() * 4);
+            for (let i = 0; i < nPuffs; i++) {
+                const rh = size * (0.3 + rand() * 0.25);
+                puffs.push({
+                    n: center.n + (rand() - 0.5) * size,
+                    e: center.e + (rand() - 0.5) * size,
+                    d: center.d + (rand() - 0.5) * size * 0.3,
+                    rh, rv: rh * 0.6
+                });
+            }
+            return puffs;
+        }
+
+        // Scenery: random clouds 2-5 km up, rejecting any that would ever block the view
+        // of the aircraft on its default flight (so only the obscuring clouds cause dropouts)
+        function buildBackgroundClouds() {
+            backgroundClouds = [];
+            let n = 0;
+            for (let attempt = 0; n < 50 && attempt < 500; attempt++) {
+                const center = {
+                    n: (Math.random() - 0.5) * 40000,
+                    e: (Math.random() - 0.5) * 40000,
+                    d: -(2000 + Math.random() * 3000)
+                };
+                const puffs = makeCloudCluster(center, 150 + Math.random() * 100, Math.random);
+                let blocks = false;
+                for (let t = 0; t <= 200 && !blocks; t += 0.25) {
+                    const p = defaultPathAt(t);
+                    blocks = puffs.some(puff => segmentHitsPuff(p, puff, 1.3));
+                }
+                if (!blocks) {
+                    backgroundClouds.push(...puffs);
+                    n++;
+                }
+            }
+            clouds = backgroundClouds.concat(obscuringClouds);
+        }
+
+        // Clouds halfway between the camera and the aircraft at evenly spaced times
+        // during the pass, so each one hides the aircraft for a while
+        function buildObscuringClouds() {
+            obscuringClouds = [];
+            const rand = seededRandom(1);
+            for (let i = 0; i < OBSCURING_CLOUD_COUNT; i++) {
+                const p = defaultPathAt(15 + 90 * (i + 0.5) / OBSCURING_CLOUD_COUNT);
+                obscuringClouds.push(...makeCloudCluster({ n: p.n / 2, e: p.e / 2, d: p.d / 2 }, OBSCURING_CLOUD_SIZE, rand));
+            }
+            clouds = backgroundClouds.concat(obscuringClouds);
+        }
+
+        // ============ SENSOR NOISE ============
+        // Seeded, and reset with the sim, so every run sees the same noise
+        const NOISE_SEED = 42;
+        let noiseRand = seededRandom(NOISE_SEED);
+
+        function resetNoise() {
+            noiseRand = seededRandom(NOISE_SEED);
+        }
+
+        // Standard normal sample (Box-Muller)
+        function gaussian() {
+            const u = 1 - noiseRand(), v = noiseRand();
+            return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+        }
+
+        // ============ KALMAN FILTER ============
+        // Extended Kalman filter on the aircraft's position and velocity in NED,
+        // x = [n, e, d, vn, ve, vd], with a constant-velocity motion model. ADS-B measures
+        // the state directly; OpenCV measures azimuth/elevation (a bearing, no range).
+        // Measurements are applied one scalar component at a time, which is exact for the
+        // diagonal measurement noise used here.
+
+        // Advance the filter to time t (ms)
+        function kfPredictTo(t) {
+            const kf = state.kf;
+            const dt = (t - kf.t) / 1000;
+            if (dt <= 0) return;
+            const { x, P } = kf;
+            for (let i = 0; i < 3; i++) x[i] += x[i + 3] * dt;
+
+            // P = F P Fᵀ + Q, with F = [[I, dt·I], [0, I]]
+            for (let i = 0; i < 6; i++) for (let j = 0; j < 3; j++) P[i][j] += dt * P[i][j + 3];
+            for (let i = 0; i < 3; i++) for (let j = 0; j < 6; j++) P[i][j] += dt * P[i + 3][j];
+            // Continuous white-noise acceleration, so the result doesn't depend on step size
+            const q = KF_PROCESS_NOISE;
+            for (let i = 0; i < 3; i++) {
+                P[i][i] += q * dt*dt*dt / 3;
+                P[i][i + 3] += q * dt*dt / 2;
+                P[i + 3][i] += q * dt*dt / 2;
+                P[i + 3][i + 3] += q * dt;
+            }
+            kf.t = t;
+        }
+
+        // Update with a scalar measurement whose linearized model is z ≈ H·x
+        function kfScalarUpdate(H, innovation, variance) {
+            const { x, P } = state.kf;
+            const PHt = P.map(row => row.reduce((sum, v, j) => sum + v * H[j], 0));
+            const S = H.reduce((sum, h, i) => sum + h * PHt[i], 0) + variance;
+            const K = PHt.map(v => v / S);
+            for (let i = 0; i < 6; i++) x[i] += K[i] * innovation;
+            for (let i = 0; i < 6; i++) for (let j = 0; j < 6; j++) P[i][j] -= K[i] * PHt[j];
+        }
+
+        function kfUpdateAdsb(report) {
+            const z = [report.n, report.e, report.d, report.vn, report.ve, report.vd];
+            // Floors keep the filter from treating a noise-free report as exact
+            const variances = [0, 0, 0, 1, 1, 1].map(isVel =>
+                isVel ? Math.max(ADSB_VEL_NOISE, 0.5) ** 2 : Math.max(ADSB_POS_NOISE, 5) ** 2);
+
+            if (!state.kf) {
+                state.kf = {
+                    x: z.slice(),
+                    P: z.map((_, i) => z.map((_, j) => i === j ? variances[i] : 0)),
+                    t: state.time
+                };
+                return;
+            }
+            kfPredictTo(state.time);
+            for (let i = 0; i < 6; i++) {
+                const H = [0, 0, 0, 0, 0, 0];
+                H[i] = 1;
+                kfScalarUpdate(H, z[i] - state.kf.x[i], variances[i]);
+            }
+        }
+
+        // OpenCV gives the azimuth/elevation at the frame's capture time, which is earlier
+        // than now. Rather than rewinding the filter, measure the current state through the
+        // motion model: position at capture = p - v·lag.
+        function kfUpdateOpencv(meas) {
+            if (!state.kf) return;
+            kfPredictTo(state.time);
+            const lag = (state.time - meas.captureTime) / 1000;
+            const sigma = toRad(Math.max(OPENCV_NOISE_PX, 0.5) / SENSOR_PX_PER_DEG);
+
+            for (const which of ['azimuth', 'elevation']) {
+                const x = state.kf.x;
+                const n = x[0] - x[3] * lag, e = x[1] - x[4] * lag, d = x[2] - x[5] * lag;
+                const rho2 = n*n + e*e, rho = Math.sqrt(rho2), r2 = rho2 + d*d;
+                let J, predicted;
+                if (which === 'azimuth') {
+                    predicted = Math.atan2(e, n);
+                    J = [-e / rho2, n / rho2, 0];
+                } else {
+                    predicted = Math.atan2(-d, rho);
+                    J = [d * n / (rho * r2), d * e / (rho * r2), -rho / r2];
+                }
+                // ∂(position at capture)/∂x = [I, -lag·I]
+                const H = [...J, ...J.map(v => -lag * v)];
+                let innovation = toRad(meas[which]) - predicted;
+                innovation = Math.atan2(Math.sin(innovation), Math.cos(innovation)); // wrap
+                kfScalarUpdate(H, innovation, sigma * sigma);
+            }
+        }
+
+        // The filter's estimate as angles from the camera, with a 2x2 covariance in deg²
+        function kfAngles() {
+            const [n, e, d] = state.kf.x;
+            const rho2 = n*n + e*e, rho = Math.sqrt(rho2), r2 = rho2 + d*d;
+            const k = 180 / Math.PI;
+            const Jaz = [-e / rho2 * k, n / rho2 * k, 0];
+            const Jel = [d * n / (rho * r2) * k, d * e / (rho * r2) * k, -rho / r2 * k];
+            const P = state.kf.P;
+            const quad = (A, B) => {
+                let sum = 0;
+                for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) sum += A[i] * P[i][j] * B[j];
+                return sum;
+            };
+            return {
+                ...anglesOf({ n, e, d }),
+                cov: [[quad(Jaz, Jaz), quad(Jaz, Jel)], [quad(Jel, Jaz), quad(Jel, Jel)]]
+            };
+        }
+
+        // Semi-axes and rotation of the k-sigma ellipse of a 2x2 covariance
+        function covEllipse(C, k) {
+            const [[a, b], [, c]] = C;
+            const mid = (a + c) / 2, diff = Math.sqrt(((a - c) / 2) ** 2 + b * b);
+            return {
+                major: k * Math.sqrt(Math.max(mid + diff, 0)),
+                minor: k * Math.sqrt(Math.max(mid - diff, 0)),
+                angle: 0.5 * Math.atan2(2 * b, a - c)
+            };
+        }
+
         // ============ SIMULATION STEP ============
         function simulate(dt) {
             const dtSec = dt / 1000;
             
-            // 1. Update aircraft position
-            state.aircraft.n += state.aircraft.vn * dtSec;
-            state.aircraft.e += state.aircraft.ve * dtSec;
-            state.aircraft.d += state.aircraft.vd * dtSec;
-            
+            // 1. Sensors sample the aircraft at state.time; it moves at the end of the step
+
             // 2. ADS-B update (every 5 seconds)
             if (state.time - state.lastAdsbTime >= ADSB_UPDATE_RATE) {
-                state.adsbPosition = { ...state.aircraft };
+                const a = state.aircraft;
+                state.adsbPosition = {
+                    n: a.n + gaussian() * ADSB_POS_NOISE,
+                    e: a.e + gaussian() * ADSB_POS_NOISE,
+                    d: a.d + gaussian() * ADSB_POS_NOISE,
+                    vn: a.vn + gaussian() * ADSB_VEL_NOISE,
+                    ve: a.ve + gaussian() * ADSB_VEL_NOISE,
+                    vd: a.vd + gaussian() * ADSB_VEL_NOISE
+                };
                 state.lastAdsbTime = state.time;
+                kfUpdateAdsb(state.adsbPosition);
                 state.adsbReports.push({ ...state.adsbPosition });
                 if (state.adsbReports.length > 12) state.adsbReports.shift();
                 state.events.adsb.push(state.time / 1000);
             }
             
+            // Can the camera see the aircraft, or is it behind a cloud?
+            state.occluded = lineOfSightBlocked(state.aircraft);
+
             // 3. OpenCV "detection" - one frame is analyzed at a time; its result
             // arrives OPENCV_PERIOD after capture, then the next frame is captured
             if (state.measurementQueue.length > 0) {
                 // Still analyzing the previous frame
-            } else if (isInFOV()) {
+            } else if (isInFOV() && !state.occluded) {
                 const { px, py, panError, tiltError } = aircraftToPixel();
                 const { azimuth, elevation } = getAircraftAngles();
+                // Centroid noise, in pixels (py points down)
+                const nx = gaussian() * OPENCV_NOISE_PX, ny = gaussian() * OPENCV_NOISE_PX;
                 state.measurementQueue.push({
                     time: state.time + OPENCV_PERIOD,
                     captureTime: state.time,
-                    px, py, panError, tiltError,
-                    azimuth, elevation,
+                    px: px + nx, py: py + ny,
+                    panError: panError + nx / SENSOR_PX_PER_DEG,
+                    tiltError: tiltError - ny / SENSOR_PX_PER_DEG,
+                    azimuth: azimuth + nx / SENSOR_PX_PER_DEG,
+                    elevation: elevation - ny / SENSOR_PX_PER_DEG,
                     valid: true
                 });
             } else {
+                // Draw the noise anyway so the noise sequence doesn't depend on what was seen
+                gaussian(); gaussian();
                 state.measurementQueue.push({
                     time: state.time + OPENCV_PERIOD,
                     captureTime: state.time,
@@ -979,6 +1322,7 @@
                     }
                 }
                 
+                if (newMeas.valid) kfUpdateOpencv(newMeas);
                 state.lastMeasurement = newMeas;
                 state.lastOpencvArrival = state.time;
                 state.events.opencv.push({ t: state.time / 1000, valid: newMeas.valid });
@@ -1002,7 +1346,15 @@
                 let errorPanDeg = 0;
                 let errorTiltDeg = 0;
                 
-                if (haveOpencvLock) {
+                if (ESTIMATOR === 'kalman' && state.kf) {
+                    // Target: Kalman estimate, predicted ahead by the lookahead
+                    kfPredictTo(state.time);
+                    const x = state.kf.x;
+                    const ahead = PREDICTION_TIME / 1000;
+                    const target = anglesOf({ n: x[0] + x[3] * ahead, e: x[1] + x[4] * ahead, d: x[2] + x[5] * ahead });
+                    errorPanDeg = target.azimuth - state.camera.pan;
+                    errorTiltDeg = target.elevation - state.camera.tilt;
+                } else if (haveOpencvLock) {
                     // Target: Predicted position based on measurement and estimated rate
                     const meas = state.lastMeasurement;
                     
@@ -1068,12 +1420,17 @@
                     state.history.tiltError.shift();
                     state.history.panRateCmd.shift();
                     state.history.tiltRateCmd.shift();
+                    state.history.occluded.shift();
                 }
+                // Plot the true pointing error (not the controller's estimate of it), so
+                // estimators can be compared
+                const truth = aircraftToPixel();
                 state.history.time.push(state.time / 1000);
-                state.history.panError.push(errorPanDeg);
-                state.history.tiltError.push(errorTiltDeg);
+                state.history.panError.push(truth.panError);
+                state.history.tiltError.push(truth.tiltError);
                 state.history.panRateCmd.push(panCmd);
                 state.history.tiltRateCmd.push(tiltCmd);
+                state.history.occluded.push(state.occluded);
 
                 // Drop sensor events that have scrolled off the history plot
                 const oldest = state.history.time[0];
@@ -1108,8 +1465,66 @@
             // Clamp camera angles
             state.camera.tilt = clamp(state.camera.tilt, -10, 90);
             
-            // Update time
+            // Update aircraft position and time, so the aircraft, camera and
+            // state.time all refer to the same instant at the start of the next step
+            state.aircraft.n += state.aircraft.vn * dtSec;
+            state.aircraft.e += state.aircraft.ve * dtSec;
+            state.aircraft.d += state.aircraft.vd * dtSec;
             state.time += dt;
+        }
+
+        // ============ VIEW ============
+        // The camera image is the full window, w x h. These map angles into it and apply
+        // the stabilized zoom.
+
+        // Focal length in pixels for an image h pixels tall
+        function focalLength(h) {
+            return (h / 2) / Math.tan(toRad(CAMERA_FOV_V) / 2);
+        }
+
+        // Pixel position of an azimuth/elevation in the full camera image: a perspective
+        // projection matching the Three.js camera. Points behind the camera keep their
+        // direction but are pushed far off-image.
+        function projectToFrame(azimuth, elevation, w, h) {
+            const p = toRad(state.camera.pan), t = toRad(state.camera.tilt);
+            const a = toRad(azimuth), e = toRad(elevation);
+            // Unit vectors in (north, east, up)
+            const dir = [Math.cos(e) * Math.cos(a), Math.cos(e) * Math.sin(a), Math.sin(e)];
+            const fwd = [Math.cos(t) * Math.cos(p), Math.cos(t) * Math.sin(p), Math.sin(t)];
+            const right = [-Math.sin(p), Math.cos(p), 0];
+            const up = [-Math.sin(t) * Math.cos(p), -Math.sin(t) * Math.sin(p), Math.cos(t)];
+            const dot = (u, v) => u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
+            const xc = dot(dir, right), yc = dot(dir, up), zc = dot(dir, fwd);
+            if (zc < 0.05) {
+                const k = 1e5 / Math.max(Math.hypot(xc, yc), 1e-9);
+                return { x: w / 2 + xc * k, y: h / 2 - yc * k };
+            }
+            const f = focalLength(h);
+            return { x: w / 2 + xc / zc * f, y: h / 2 - yc / zc * f };
+        }
+
+        // Stabilized zoom: a crop of the camera image centered on the Kalman target, scaled
+        // up to fill the window. The crop can't extend past the edge of the image.
+        const view = { zoom: 1, cx: 0, cy: 0 }; // zoom factor; crop center in image pixels
+
+        function updateView() {
+            const w = window.innerWidth, h = window.innerHeight;
+            view.zoom = (STABILIZED_ZOOM > 1 && state.kf) ? STABILIZED_ZOOM : 1;
+            view.cx = w / 2;
+            view.cy = h / 2;
+            if (view.zoom > 1) {
+                kfPredictTo(state.time);
+                const { azimuth, elevation } = anglesOf({ n: state.kf.x[0], e: state.kf.x[1], d: state.kf.x[2] });
+                const target = projectToFrame(azimuth, elevation, w, h);
+                const halfW = w / (2 * view.zoom), halfH = h / (2 * view.zoom);
+                view.cx = clamp(target.x, halfW, w - halfW);
+                view.cy = clamp(target.y, halfH, h - halfH);
+            }
+        }
+
+        // Camera-image pixels to window pixels
+        function frameToScreen({ x, y }, w, h) {
+            return { x: (x - view.cx) * view.zoom + w / 2, y: (y - view.cy) * view.zoom + h / 2 };
         }
 
         // ============ RENDERING ============
@@ -1122,24 +1537,25 @@
             
             ctx.clearRect(0, 0, w, h);
 
-            // Screen position of an azimuth/elevation, relative to where the camera points.
-            // For small FOV a linear approximation of the perspective projection is fine.
-            const scale = h / CAMERA_FOV_V; // pixels per degree
-            function toScreen(azimuth, elevation) {
-                let panError = azimuth - state.camera.pan;
-                while (panError > 180) panError -= 360;
-                while (panError < -180) panError += 360;
-                return { x: w / 2 + panError * scale, y: h / 2 - (elevation - state.camera.tilt) * scale };
+            // Screen position of an azimuth/elevation, through the same projection and
+            // stabilized crop as the 3D view
+            const scale = focalLength(h) * Math.PI / 180 * view.zoom; // pixels per degree near center
+            const toScreen = (azimuth, elevation) => frameToScreen(projectToFrame(azimuth, elevation, w, h), w, h);
+
+            // Crosshair on the camera's boresight (off-center when the stabilized crop has moved)
+            if (overlays.crosshair) {
+                const { x, y } = frameToScreen({ x: w / 2, y: h / 2 }, w, h);
+                ctx.fillStyle = 'rgba(255, 0, 102, 0.6)';
+                ctx.fillRect(x - 30, y - 1, 60, 2);
+                ctx.fillRect(x - 1, y - 30, 2, 60);
             }
 
             // Draw ADS-B reported position; pinned to the edge of the clear area (between
             // the UI panels) with an arrow when it's off screen
-            if (state.adsbPosition) {
+            if (overlays.adsb && state.adsbPosition) {
                 const { azimuth, elevation } = anglesOf(state.adsbPosition);
                 const p = toScreen(azimuth, elevation);
-                const rect = sel => document.querySelector(sel).getBoundingClientRect();
-                const left = rect('.left-column').right + 20, right = rect('.right-column').left - 20;
-                const top = rect('h1').bottom + 20, bottom = rect('.center-bottom').top - 20;
+                const { left, right, top, bottom } = clearArea;
                 const x = clamp(p.x, left, right);
                 const y = clamp(p.y, top, bottom);
                 const offscreen = x !== p.x || y !== p.y;
@@ -1181,15 +1597,40 @@
 
                 // Label goes below where the OpenCV box would be, so the two don't collide,
                 // unless that would put it under the bottom panel
-                ctx.font = '14px monospace';
+                ctx.font = '12px monospace';
                 const label = `ADS-B ${age.toFixed(1)}s old`;
                 const tx = clamp(x - 30, left, right - ctx.measureText(label).width);
-                const below = y + (offscreen ? 32 : 48);
+                const below = y + (offscreen ? 30 : 46);
                 ctx.fillText(label, tx, below > bottom + 15 ? y - 22 : below);
             }
 
+            // Draw Kalman estimate with its 2σ uncertainty ellipse
+            if (overlays.kalman && state.kf) {
+                kfPredictTo(state.time);
+                const est = kfAngles();
+                const { x, y } = toScreen(est.azimuth, est.elevation);
+                const ell = covEllipse(est.cov, 2);
+                ctx.strokeStyle = KF_COLOR;
+                ctx.fillStyle = KF_COLOR;
+                ctx.lineWidth = 2;
+                ctx.setLineDash([6, 4]);
+                const rx = Math.max(ell.major * scale, 2), ry = Math.max(ell.minor * scale, 2);
+                ctx.beginPath();
+                // Screen y is flipped relative to elevation, so the rotation flips too
+                ctx.ellipse(x, y, rx, ry, -ell.angle, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.beginPath();
+                ctx.arc(x, y, 4, 0, Math.PI * 2);
+                ctx.fill();
+                // Label just right of the ellipse (and clear of the 60px OpenCV box)
+                const halfWidth = Math.hypot(rx * Math.cos(ell.angle), ry * Math.sin(ell.angle));
+                ctx.font = '12px monospace';
+                ctx.fillText(`KALMAN 2σ ${ell.major.toFixed(2)}°`, x + Math.max(halfWidth, 30) + 8, y + 5);
+            }
+
             // Draw OpenCV detection (delayed position); flashes when a new result arrives
-            if (state.lastMeasurement && state.lastMeasurement.valid) {
+            if (overlays.opencv && state.lastMeasurement && state.lastMeasurement.valid) {
                 const { x, y } = toScreen(state.lastMeasurement.azimuth, state.lastMeasurement.elevation);
                 const f = flash(state.lastOpencvArrival, 250);
                 const age = (state.time - state.lastMeasurement.captureTime) / 1000;
@@ -1208,20 +1649,21 @@
 
                 // Detection label
                 ctx.fillStyle = OPENCV_COLOR;
-                ctx.font = '14px monospace';
+                ctx.font = '12px monospace';
                 ctx.fillText(`OPENCV ${age.toFixed(2)}s old`, x - boxSize/2 + 2, y - boxSize/2 - 8);
             }
         }
 
         function drawTopView() {
             const ctx = topCtx;
+            const size = topCanvas.width;
             ctx.fillStyle = '#1a1a3a';
-            ctx.fillRect(0, 0, 300, 300);
+            ctx.fillRect(0, 0, size, size);
             
-            // Scale: 300 pixels = 20000 meters (zoomed out a bit)
-            const scale = 300 / 20000;
-            const cx = 150;
-            const cy = 150;
+            // The view spans 20 km
+            const scale = size / 20000;
+            const cx = size / 2;
+            const cy = size / 2;
             
             // Draw grid
             ctx.strokeStyle = '#333355';
@@ -1232,6 +1674,14 @@
                 ctx.stroke();
             }
             
+            // Draw clouds
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
+            for (const puff of clouds) {
+                ctx.beginPath();
+                ctx.arc(cx + puff.e * scale, cy - puff.n * scale, Math.max(1, puff.rh * scale), 0, Math.PI * 2);
+                ctx.fill();
+            }
+
             // Draw camera FOV cone
             const panRad = toRad(state.camera.pan);
             const halfFov = toRad(CAMERA_FOV_H / 2);
@@ -1259,7 +1709,7 @@
                 ctx.lineWidth = 2;
                 ctx.beginPath();
                 ctx.moveTo(cx, cy);
-                ctx.lineTo(cx + Math.sin(bRad) * 300, cy - Math.cos(bRad) * 300);
+                ctx.lineTo(cx + Math.sin(bRad) * size, cy - Math.cos(bRad) * size);
                 ctx.stroke();
                 ctx.globalAlpha = 1;
             }
@@ -1286,35 +1736,45 @@
                 ctx.globalAlpha = 1;
             }
 
-            // Draw aircraft
+            // Draw aircraft (true position)
             const ax = cx + state.aircraft.e * scale;
             const ay = cy - state.aircraft.n * scale;
             
-            ctx.fillStyle = '#00ff88';
+            ctx.fillStyle = '#ffffff';
             ctx.beginPath();
             ctx.arc(ax, ay, 4, 0, Math.PI * 2);
             ctx.fill();
+
+            // Draw Kalman estimate
+            if (state.kf) {
+                ctx.strokeStyle = KF_COLOR;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(cx + state.kf.x[1] * scale, cy - state.kf.x[0] * scale, 7, 0, Math.PI * 2);
+                ctx.stroke();
+            }
             
             // Velocity vector removed for cleaner view
 
             // Legend
-            ctx.font = '11px monospace';
-            [['● aircraft', '#00ff88'], ['● ADS-B reports', ADSB_COLOR], ['— OpenCV bearing', OPENCV_COLOR]]
-                .forEach(([text, color], i) => {
-                    ctx.fillStyle = color;
-                    ctx.fillText(text, 8, 254 + i * 15);
-                });
+            const legend = [['● aircraft (true)', '#ffffff'], ['○ Kalman estimate', KF_COLOR], ['● ADS-B reports', ADSB_COLOR],
+                            ['— OpenCV bearing', OPENCV_COLOR], ['● clouds', '#ccc']];
+            ctx.font = '10px monospace';
+            legend.forEach(([text, color], i) => {
+                ctx.fillStyle = color;
+                ctx.fillText(text, 5, size - 5 - (legend.length - 1 - i) * 12);
+            });
         }
 
         function drawHistory() {
             const ctx = historyCtx;
+            const w = historyCanvas.width;
+            const h = historyCanvas.height;
             ctx.fillStyle = '#1a1a3a';
-            ctx.fillRect(0, 0, 800, 150);
+            ctx.fillRect(0, 0, w, h);
             
             if (state.history.time.length < 2) return;
             
-            const w = 800;
-            const h = 150;
             const margin = 30;
             
             // Draw axes
@@ -1348,6 +1808,17 @@
                 ctx.stroke();
             }
             
+            // Shade the stretches where a cloud blocked the line of sight
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+            for (let i = 1; i < times.length; i++) {
+                if (!state.history.occluded[i]) continue;
+                const start = i - 1;
+                while (i + 1 < times.length && state.history.occluded[i + 1]) i++;
+                const x0 = margin + (times[start] - minT) * xScale;
+                const x1 = margin + (times[i] - minT) * xScale;
+                ctx.fillRect(x0, 0, x1 - x0, h);
+            }
+
             // Sensor arrivals: ADS-B reports as full-height lines, OpenCV results as
             // ticks along the bottom (grey when nothing was detected)
             const eventX = t => margin + (t - minT) * xScale;
@@ -1386,10 +1857,10 @@
             ctx.globalAlpha = 1.0;
 
             // Legend
-            ctx.font = '11px monospace';
+            ctx.font = '10px monospace';
             let lx = margin + 4;
-            [['pan err', '#ff6666'], ['tilt err', '#66ff66'], ['pan cmd/10', '#6666ff'], ['tilt cmd/10', '#ffff66'],
-             ['┆ ADS-B report', ADSB_COLOR], ['▮ OpenCV result', OPENCV_COLOR]].forEach(([text, color]) => {
+            [['true pan err', '#ff6666'], ['true tilt err', '#66ff66'], ['pan cmd/10', '#6666ff'], ['tilt cmd/10', '#ffff66'],
+             ['┆ ADS-B report', ADSB_COLOR], ['▮ OpenCV result', OPENCV_COLOR], ['█ in cloud', '#aaa']].forEach(([text, color]) => {
                 ctx.fillStyle = color;
                 ctx.fillText(text, lx, 12);
                 lx += ctx.measureText(text).width + 14;
@@ -1402,6 +1873,9 @@
             
             document.getElementById('simTime').textContent = (state.time / 1000).toFixed(2) + ' s';
             document.getElementById('range').textContent = (range / 1000).toFixed(2) + ' km';
+            const los = document.getElementById('lineOfSight');
+            los.textContent = state.occluded ? 'blocked by cloud' : 'clear';
+            los.className = 'stat-value ' + (state.occluded ? 'warning' : '');
             
             document.getElementById('panAngle').textContent = state.camera.pan.toFixed(2) + '°';
             document.getElementById('tiltAngle').textContent = state.camera.tilt.toFixed(2) + '°';
@@ -1462,6 +1936,18 @@
                 document.getElementById('adsbNext').style.width = '0%';
             }
 
+            // Kalman: expected (RMS) position error from the covariance, vs. actual error
+            const kfStatus = document.getElementById('kfStatus');
+            if (state.kf) {
+                kfPredictTo(state.time);
+                const { x, P } = state.kf;
+                const sigma = Math.sqrt(P[0][0] + P[1][1] + P[2][2]);
+                const err = Math.hypot(x[0] - state.aircraft.n, x[1] - state.aircraft.e, x[2] - state.aircraft.d);
+                kfStatus.textContent = `±${sigma.toFixed(0)} m · err ${err.toFixed(0)} m`;
+            } else {
+                kfStatus.textContent = '--';
+            }
+
             const opencvAge = document.getElementById('opencvAge');
             if (state.lastMeasurement) {
                 const detected = state.lastMeasurement.valid;
@@ -1488,6 +1974,7 @@
                 simulate(DT);
             }
             
+            updateView();
             updateThreeJS(); // Render 3D scene
             drawHUD();
             drawTopView();
@@ -1499,13 +1986,12 @@
 
         // ============ RESET ============
         function reset() {
+            resetNoise();
             state = {
                 running: false,
                 time: 0,
-                aircraft: {
-                    n: 8000, e: -5000, d: -3000,
-                    vn: -80, ve: 120, vd: 0
-                },
+                aircraft: { ...INITIAL_AIRCRAFT },
+                occluded: false,
                 camera: {
                     pan: 0, tilt: 0,
                     panRate: 0, tiltRate: 0,
@@ -1528,6 +2014,7 @@
                 adsbPosition: null,
                 adsbReports: [],
                 lastOpencvArrival: -Infinity,
+                kf: null,
                 events: { adsb: [], opencv: [] },
                 mode: 'cueing',
                 history: {
@@ -1535,7 +2022,8 @@
                     panError: [],
                     tiltError: [],
                     panRateCmd: [],
-                    tiltRateCmd: []
+                    tiltRateCmd: [],
+                    occluded: []
                 }
             };
             document.getElementById('startBtn').textContent = 'Start';
@@ -1601,6 +2089,71 @@
             document.getElementById('predictionVal').textContent = PREDICTION_TIME + ' ms';
         });
 
+        // Overlay toggles
+        for (const [id, key] of [['showAdsb', 'adsb'], ['showOpencv', 'opencv'], ['showKalman', 'kalman'],
+                                 ['showCrosshair', 'crosshair']]) {
+            document.getElementById(id).addEventListener('change', (e) => {
+                overlays[key] = e.target.checked;
+            });
+        }
+
+        document.getElementById('showPanels').addEventListener('change', (e) => {
+            document.body.classList.toggle('panels-hidden', !e.target.checked);
+            updateClearArea();
+        });
+
+        // Zoom
+        document.getElementById('opticalZoomSlider').addEventListener('input', (e) => {
+            OPTICAL_ZOOM = parseFloat(e.target.value);
+            CAMERA_FOV_H = WIDE_FOV_H / OPTICAL_ZOOM;
+            CAMERA_FOV_V = CAMERA_FOV_H * 0.75;
+            SENSOR_PX_PER_DEG = 500 / CAMERA_FOV_H;
+            const fov = CAMERA_FOV_H < 10 ? CAMERA_FOV_H.toFixed(1) : CAMERA_FOV_H.toFixed(0);
+            document.getElementById('opticalZoomVal').textContent = `${OPTICAL_ZOOM}× ${fov}°`;
+        });
+
+        document.getElementById('stabZoomSlider').addEventListener('input', (e) => {
+            STABILIZED_ZOOM = parseFloat(e.target.value);
+            document.getElementById('stabZoomVal').textContent = STABILIZED_ZOOM > 1 ? STABILIZED_ZOOM + '×' : 'off';
+        });
+
+        // Sensor noise and estimator
+        document.getElementById('opencvNoiseSlider').addEventListener('input', (e) => {
+            OPENCV_NOISE_PX = parseFloat(e.target.value);
+            document.getElementById('opencvNoiseVal').textContent = OPENCV_NOISE_PX + ' px';
+        });
+
+        document.getElementById('adsbNoiseSlider').addEventListener('input', (e) => {
+            ADSB_POS_NOISE = parseFloat(e.target.value);
+            document.getElementById('adsbNoiseVal').textContent = ADSB_POS_NOISE + ' m';
+        });
+
+        document.querySelectorAll('input[name="estimator"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                ESTIMATOR = e.target.value;
+            });
+        });
+
+        document.getElementById('kfQSlider').addEventListener('input', (e) => {
+            KF_PROCESS_NOISE = parseFloat(e.target.value);
+            document.getElementById('kfQVal').textContent = KF_PROCESS_NOISE + ' m²/s³';
+        });
+
+        // Cloud sliders
+        document.getElementById('cloudCountSlider').addEventListener('input', (e) => {
+            OBSCURING_CLOUD_COUNT = parseInt(e.target.value);
+            document.getElementById('cloudCountVal').textContent = OBSCURING_CLOUD_COUNT;
+            buildObscuringClouds();
+            createClouds();
+        });
+
+        document.getElementById('cloudSizeSlider').addEventListener('input', (e) => {
+            OBSCURING_CLOUD_SIZE = parseInt(e.target.value);
+            document.getElementById('cloudSizeVal').textContent = OBSCURING_CLOUD_SIZE + ' m';
+            buildObscuringClouds();
+            createClouds();
+        });
+
         document.getElementById('panAccelSlider').addEventListener('input', (e) => {
             CAMERA_MAX_PAN_ACCEL = parseInt(e.target.value);
             document.getElementById('panAccelVal').textContent = CAMERA_MAX_PAN_ACCEL + ' °/s²';
@@ -1612,6 +2165,8 @@
         });
 
         // Initialize
+        buildObscuringClouds();
+        buildBackgroundClouds();
         initThreeJS();
         requestAnimationFrame(loop);
     </script>

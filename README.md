@@ -12,6 +12,9 @@ A realistic 3D simulation of a PTZ (Pan-Tilt-Zoom) camera tracking an aircraft, 
   - Configurable **Camera Latency** (command processing delay).
   - **Rate Quantization**: Supports both linear and VISCA table-based rate quantization.
   - **Dynamics**: Adjustable maximum pan/tilt acceleration.
+- **Sensors**: ADS-B reports every 5 s and OpenCV detections every OpenCV Period, each with adjustable noise. Arrivals are marked in the camera view, top-down view, and time history.
+- **Clouds**: Adjustable clouds placed between the camera and the aircraft block OpenCV, to test tracking through a loss of visual.
+- **Estimation**: An extended Kalman filter fuses ADS-B and OpenCV (with OpenCV's latency accounted for), and can be compared against a simple two-point estimator.
 - **Control System**: Tunable PID controller for tracking performance.
 
 ## Deployment
