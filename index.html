@@ -20,6 +20,7 @@
     <meta name="twitter:image" content="https://heavymeta.org/ptzsim/assets/social_preview.png">
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="assets/cirrus-texture.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -451,7 +452,7 @@
 
             <div class="panel">
                 <h3>Timing</h3>
-                <div class="ctl"><span>CV period</span><input type="range" id="opencvPeriodSlider" min="0" max="500" step="10" value="200"><span id="opencvPeriodVal">200 ms</span></div>
+                <div class="ctl"><span>CV period</span><input type="range" id="opencvPeriodSlider" min="0" max="2000" step="10" value="500"><span id="opencvPeriodVal">500 ms</span></div>
                 <div class="latency-bar"><div class="latency-fill" id="opencvPeriod" style="width: 0%"></div></div>
                 <div class="ctl"><span>Cam latency</span><input type="range" id="cameraLatencySlider" min="0" max="500" step="10" value="500"><span id="cameraLatencyVal">500 ms</span></div>
                 <div class="latency-bar"><div class="latency-fill" id="cameraLatency" style="width: 0%"></div></div>
@@ -528,7 +529,7 @@
         let CAMERA_FOV_H = WIDE_FOV_H / OPTICAL_ZOOM; // degrees
         let CAMERA_FOV_V = CAMERA_FOV_H * 0.75;       // degrees (4:3 sensor)
         let STABILIZED_ZOOM = 1;
-        let OPENCV_PERIOD = 200;  // ms - time to analyze a single frame
+        let OPENCV_PERIOD = 500;  // ms - time to analyze a single frame
         let CAMERA_PERIOD = 500;  // ms - time to process one command
         let PREDICTION_TIME = 0;   // ms
         const CAMERA_MAX_RATE = 60;  // deg/s
@@ -623,6 +624,7 @@
 
             // Clouds
             createClouds();
+            createCirrus();
 
             // Aircraft Model
             aircraftMesh = createAircraftModel();
@@ -716,6 +718,37 @@
             add(lightGeo, light(0xffffff), 0, 0, -18.9);
 
             return aircraft;
+        }
+
+        // A thin, high cirrus layer: scenery only. It's far above the aircraft, so it can
+        // never come between the camera and the aircraft, but it slides by behind the
+        // aircraft as the camera pans, which shows the motion in a stabilized view.
+        const CIRRUS_ALTITUDE = 8000; // m above the camera
+        const CIRRUS_TILE = 6000;     // m covered by one repeat of the texture
+
+        function createCirrus() {
+            // Opacity map keyed from a photo of real cirrus (see assets/cirrus-texture.js),
+            // applied to plain white. Mirrored repeats hide the seams between tiles.
+            if (typeof CIRRUS_TEXTURE_URL === 'undefined') return;
+            const image = new Image();
+            const texture = new THREE.Texture(image);
+            image.onload = () => { texture.needsUpdate = true; };
+            image.src = CIRRUS_TEXTURE_URL;
+            texture.wrapS = texture.wrapT = THREE.MirroredRepeatWrapping;
+            const extent = 200000; // m; the fog hides it long before the edge
+            texture.repeat.set(extent / CIRRUS_TILE, extent / CIRRUS_TILE);
+            texture.anisotropy = renderer.capabilities.getMaxAnisotropy(); // seen at a low angle
+
+            const cirrus = new THREE.Mesh(
+                new THREE.PlaneGeometry(extent, extent),
+                new THREE.MeshBasicMaterial({
+                    color: 0xffffff, alphaMap: texture, transparent: true, depthWrite: false, side: THREE.DoubleSide
+                })
+            );
+            cirrus.rotation.x = Math.PI / 2; // horizontal, visible from below
+            cirrus.position.y = CIRRUS_ALTITUDE;
+            cirrus.renderOrder = -1; // farthest transparent layer: draw it before the clouds
+            scene.add(cirrus);
         }
 
         // Meshes for the sim's cloud puffs; rebuilt when the cloud settings change
