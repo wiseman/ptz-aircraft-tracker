@@ -218,6 +218,21 @@
             transition: width 0.1s;
         }
 
+        /* Sensor feed indicator lights; brightness is driven from JS */
+        .feed-led {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+            vertical-align: -1px;
+            opacity: 0.25;
+        }
+        .feed-bar {
+            height: 4px;
+            margin: -2px 0 10px;
+        }
+
         /* Scrollbar styling */
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
@@ -347,7 +362,22 @@
                     <span class="stat-value" id="range">0 m</span>
                 </div>
             </div>
-            
+
+            <div class="panel">
+                <h3>Sensor Feeds</h3>
+                <div class="stat-row">
+                    <span class="stat-label"><span class="feed-led" id="adsbLed" style="background: #e040fb"></span>ADS-B</span>
+                    <span class="stat-value" id="adsbAge">--</span>
+                </div>
+                <div class="latency-bar feed-bar">
+                    <div class="latency-fill" id="adsbNext" style="width: 0%; background: #e040fb"></div>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label"><span class="feed-led" id="opencvLed" style="background: #ff6600"></span>OpenCV</span>
+                    <span class="stat-value" id="opencvAge">--</span>
+                </div>
+            </div>
+
             <div class="panel">
                 <h3>Camera State</h3>
                 <div class="stat-row">
@@ -484,16 +514,16 @@
             <div class="panel">
                 <h3>PID Tuning</h3>
                 <div class="slider-group">
-                    <label><span>Kp (Proportional)</span><span id="kpVal">2.0</span></label>
-                    <input type="range" id="kpSlider" min="0" max="5" step="0.1" value="2.0">
+                    <label><span>Kp (Proportional)</span><span id="kpVal">0.8</span></label>
+                    <input type="range" id="kpSlider" min="0" max="5" step="0.1" value="0.8">
                 </div>
                 <div class="slider-group">
-                    <label><span>Ki (Integral)</span><span id="kiVal">0.1</span></label>
-                    <input type="range" id="kiSlider" min="0" max="1" step="0.01" value="0.1">
+                    <label><span>Ki (Integral)</span><span id="kiVal">0.4</span></label>
+                    <input type="range" id="kiSlider" min="0" max="1" step="0.01" value="0.4">
                 </div>
                 <div class="slider-group">
-                    <label><span>Kd (Derivative)</span><span id="kdVal">0.8</span></label>
-                    <input type="range" id="kdSlider" min="0" max="2" step="0.05" value="0.8">
+                    <label><span>Kd (Derivative)</span><span id="kdVal">0.3</span></label>
+                    <input type="range" id="kdSlider" min="0" max="2" step="0.05" value="0.3">
                 </div>
             </div>
         </div>
@@ -513,7 +543,11 @@
         const DT = 16; // ms (~60fps)
         let CAMERA_RATE_BITS = 16; // bits for rate quantization
         let RATE_QUANTIZATION_MODE = 'table'; // 'linear' or 'table'
-        
+
+        // Display colors for the two position sources
+        const ADSB_COLOR = '#e040fb';
+        const OPENCV_COLOR = '#ff6600';
+
         // VISCA Pan/Tilt Speed Table
         const QUANTIZATION_TABLE = [
             0.3, 1.0, 1.5, 2.2, 2.4, 2.6, 2.8, 3.0,
@@ -737,12 +771,17 @@
             pid: {
                 integralX: 0, integralY: 0,
                 prevErrorX: 0, prevErrorY: 0,
-                Kp: 2.0, Ki: 0.1, Kd: 0.8
+                Kp: 0.8, Ki: 0.4, Kd: 0.3
             },
             
             // ADS-B state
             lastAdsbTime: -Infinity,
             adsbPosition: null,
+            adsbReports: [],             // recent ADS-B reports, oldest first
+            lastOpencvArrival: -Infinity, // time the last OpenCV result arrived
+
+            // Sensor arrival times (s) for the history plot
+            events: { adsb: [], opencv: [] },
             
             // Mode
             mode: 'cueing', // 'cueing', 'acquiring', 'tracking', 'lost'
@@ -827,9 +866,19 @@
             }
         }
 
+        // Fades from 1 to 0 over `duration` ms of sim time after `eventTime`
+        function flash(eventTime, duration) {
+            const age = state.time - eventTime;
+            return (age >= 0 && age < duration) ? 1 - age / duration : 0;
+        }
+
         // Get aircraft angles relative to camera pointing direction
         function getAircraftAngles() {
-            const { n, e, d } = state.aircraft;
+            return anglesOf(state.aircraft);
+        }
+
+        // Azimuth/elevation/range of an NED position as seen from the camera
+        function anglesOf({ n, e, d }) {
             const range = Math.sqrt(n*n + e*e + d*d);
             const groundRange = Math.sqrt(n*n + e*e);
             
@@ -890,11 +939,16 @@
             if (state.time - state.lastAdsbTime >= ADSB_UPDATE_RATE) {
                 state.adsbPosition = { ...state.aircraft };
                 state.lastAdsbTime = state.time;
+                state.adsbReports.push({ ...state.adsbPosition });
+                if (state.adsbReports.length > 12) state.adsbReports.shift();
+                state.events.adsb.push(state.time / 1000);
             }
             
-            // 3. OpenCV "detection" - simulate with period (frame analysis time)
-            // Push current true position into measurement queue
-            if (isInFOV()) {
+            // 3. OpenCV "detection" - one frame is analyzed at a time; its result
+            // arrives OPENCV_PERIOD after capture, then the next frame is captured
+            if (state.measurementQueue.length > 0) {
+                // Still analyzing the previous frame
+            } else if (isInFOV()) {
                 const { px, py, panError, tiltError } = aircraftToPixel();
                 const { azimuth, elevation } = getAircraftAngles();
                 state.measurementQueue.push({
@@ -926,6 +980,8 @@
                 }
                 
                 state.lastMeasurement = newMeas;
+                state.lastOpencvArrival = state.time;
+                state.events.opencv.push({ t: state.time / 1000, valid: newMeas.valid });
             }
             
             // 4. Determine tracking mode
@@ -963,15 +1019,9 @@
                     errorTiltDeg = targetEl - state.camera.tilt;
                 } else if (state.adsbPosition) {
                     // Target: ADS-B reported position
-                    const an = state.adsbPosition.n;
-                    const ae = state.adsbPosition.e;
-                    const ad = state.adsbPosition.d;
-                    const groundRange = Math.sqrt(an*an + ae*ae);
-                    const adsbAzimuth = toDeg(Math.atan2(ae, an));
-                    const adsbElevation = toDeg(Math.atan2(-ad, groundRange));
-                    
-                    errorPanDeg = adsbAzimuth - state.camera.pan;
-                    errorTiltDeg = adsbElevation - state.camera.tilt;
+                    const adsb = anglesOf(state.adsbPosition);
+                    errorPanDeg = adsb.azimuth - state.camera.pan;
+                    errorTiltDeg = adsb.elevation - state.camera.tilt;
                 }
                 
                 // Normalize angular error
@@ -1025,6 +1075,11 @@
                 state.history.panRateCmd.push(panCmd);
                 state.history.tiltRateCmd.push(tiltCmd);
 
+                // Drop sensor events that have scrolled off the history plot
+                const oldest = state.history.time[0];
+                while (state.events.adsb.length && state.events.adsb[0] < oldest) state.events.adsb.shift();
+                while (state.events.opencv.length && state.events.opencv[0].t < oldest) state.events.opencv.shift();
+
                 // Update last command time
                 state.camera.lastCommandTime = state.time;
             }
@@ -1066,44 +1121,95 @@
             const h = hudCanvas.height;
             
             ctx.clearRect(0, 0, w, h);
-            
-            // Draw OpenCV detection (delayed position)
-            if (state.lastMeasurement && state.lastMeasurement.valid) {
-                // Calculate screen position based on angular difference
-                // We use the same projection logic as the 3D camera (Perspective)
-                // For small FOV, linear approximation is fine.
-                // Scale = pixels per degree
-                const scale = h / CAMERA_FOV_V;
-                
-                const dAz = state.lastMeasurement.azimuth - state.camera.pan;
-                const dEl = state.lastMeasurement.elevation - state.camera.tilt;
-                
-                // Wrap azimuth error
-                let panError = dAz;
+
+            // Screen position of an azimuth/elevation, relative to where the camera points.
+            // For small FOV a linear approximation of the perspective projection is fine.
+            const scale = h / CAMERA_FOV_V; // pixels per degree
+            function toScreen(azimuth, elevation) {
+                let panError = azimuth - state.camera.pan;
                 while (panError > 180) panError -= 360;
                 while (panError < -180) panError += 360;
-                
-                const cx = w / 2;
-                const cy = h / 2;
-                
-                const x = cx + panError * scale;
-                const y = cy - dEl * scale;
-                
-                // Draw box
-                ctx.strokeStyle = '#ff6600';
-                ctx.lineWidth = 3;
+                return { x: w / 2 + panError * scale, y: h / 2 - (elevation - state.camera.tilt) * scale };
+            }
+
+            // Draw ADS-B reported position; pinned to the edge of the clear area (between
+            // the UI panels) with an arrow when it's off screen
+            if (state.adsbPosition) {
+                const { azimuth, elevation } = anglesOf(state.adsbPosition);
+                const p = toScreen(azimuth, elevation);
+                const rect = sel => document.querySelector(sel).getBoundingClientRect();
+                const left = rect('.left-column').right + 20, right = rect('.right-column').left - 20;
+                const top = rect('h1').bottom + 20, bottom = rect('.center-bottom').top - 20;
+                const x = clamp(p.x, left, right);
+                const y = clamp(p.y, top, bottom);
+                const offscreen = x !== p.x || y !== p.y;
+                const f = flash(state.lastAdsbTime, 1000);
+                const age = (state.time - state.lastAdsbTime) / 1000;
+
+                ctx.strokeStyle = ADSB_COLOR;
+                ctx.fillStyle = ADSB_COLOR;
+
+                // Expanding ring when a new report arrives
+                if (f > 0) {
+                    ctx.globalAlpha = f;
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.arc(x, y, 14 + 50 * (1 - f), 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.globalAlpha = 1;
+                }
+
+                ctx.lineWidth = 2 + 2 * f;
                 ctx.beginPath();
-                // Box size should also scale? Or fixed pixel size?
-                // Original was 50px on 500px width (10% width).
-                // Let's make it proportional or fixed. Fixed is usually better for trackers.
-                const boxSize = 60; 
+                if (offscreen) {
+                    // Arrow pointing toward the reported position
+                    const ang = Math.atan2(p.y - y, p.x - x);
+                    ctx.moveTo(x + Math.cos(ang) * 14, y + Math.sin(ang) * 14);
+                    ctx.lineTo(x + Math.cos(ang + 2.5) * 12, y + Math.sin(ang + 2.5) * 12);
+                    ctx.lineTo(x + Math.cos(ang - 2.5) * 12, y + Math.sin(ang - 2.5) * 12);
+                    ctx.closePath();
+                    ctx.fill();
+                } else {
+                    // Diamond
+                    ctx.moveTo(x, y - 10);
+                    ctx.lineTo(x + 10, y);
+                    ctx.lineTo(x, y + 10);
+                    ctx.lineTo(x - 10, y);
+                    ctx.closePath();
+                    ctx.stroke();
+                }
+
+                // Label goes below where the OpenCV box would be, so the two don't collide,
+                // unless that would put it under the bottom panel
+                ctx.font = '14px monospace';
+                const label = `ADS-B ${age.toFixed(1)}s old`;
+                const tx = clamp(x - 30, left, right - ctx.measureText(label).width);
+                const below = y + (offscreen ? 32 : 48);
+                ctx.fillText(label, tx, below > bottom + 15 ? y - 22 : below);
+            }
+
+            // Draw OpenCV detection (delayed position); flashes when a new result arrives
+            if (state.lastMeasurement && state.lastMeasurement.valid) {
+                const { x, y } = toScreen(state.lastMeasurement.azimuth, state.lastMeasurement.elevation);
+                const f = flash(state.lastOpencvArrival, 250);
+                const age = (state.time - state.lastMeasurement.captureTime) / 1000;
+
+                // Fixed pixel size is usually better for trackers
+                const boxSize = 60;
+                if (f > 0) {
+                    ctx.fillStyle = `rgba(255, 102, 0, ${0.35 * f})`;
+                    ctx.fillRect(x - boxSize/2, y - boxSize/2, boxSize, boxSize);
+                }
+                ctx.strokeStyle = OPENCV_COLOR;
+                ctx.lineWidth = 3 + 3 * f;
+                ctx.beginPath();
                 ctx.rect(x - boxSize/2, y - boxSize/2, boxSize, boxSize);
                 ctx.stroke();
-                
+
                 // Detection label
-                ctx.fillStyle = '#ff6600';
+                ctx.fillStyle = OPENCV_COLOR;
                 ctx.font = '14px monospace';
-                ctx.fillText('OPENCV', x - boxSize/2 + 2, y - boxSize/2 - 8);
+                ctx.fillText(`OPENCV ${age.toFixed(2)}s old`, x - boxSize/2 + 2, y - boxSize/2 - 8);
             }
         }
 
@@ -1144,7 +1250,42 @@
             ctx.beginPath();
             ctx.arc(cx, cy, 4, 0, Math.PI * 2);
             ctx.fill();
-            
+
+            // Draw OpenCV bearing (OpenCV gives direction but not range); flashes on each result
+            if (state.lastMeasurement && state.lastMeasurement.valid) {
+                const bRad = toRad(state.lastMeasurement.azimuth);
+                ctx.strokeStyle = OPENCV_COLOR;
+                ctx.globalAlpha = 0.35 + 0.65 * flash(state.lastOpencvArrival, 250);
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.lineTo(cx + Math.sin(bRad) * 300, cy - Math.cos(bRad) * 300);
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+            }
+
+            // Draw ADS-B reports; older ones fade, the newest pulses when it arrives
+            const reports = state.adsbReports;
+            ctx.fillStyle = ADSB_COLOR;
+            reports.forEach((r, i) => {
+                ctx.globalAlpha = (i + 1) / reports.length;
+                ctx.beginPath();
+                ctx.arc(cx + r.e * scale, cy - r.n * scale, 3, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.globalAlpha = 1;
+            const fAdsb = flash(state.lastAdsbTime, 1000);
+            if (reports.length && fAdsb > 0) {
+                const r = reports[reports.length - 1];
+                ctx.strokeStyle = ADSB_COLOR;
+                ctx.globalAlpha = fAdsb;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(cx + r.e * scale, cy - r.n * scale, 4 + 16 * (1 - fAdsb), 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+            }
+
             // Draw aircraft
             const ax = cx + state.aircraft.e * scale;
             const ay = cy - state.aircraft.n * scale;
@@ -1155,6 +1296,14 @@
             ctx.fill();
             
             // Velocity vector removed for cleaner view
+
+            // Legend
+            ctx.font = '11px monospace';
+            [['● aircraft', '#00ff88'], ['● ADS-B reports', ADSB_COLOR], ['— OpenCV bearing', OPENCV_COLOR]]
+                .forEach(([text, color], i) => {
+                    ctx.fillStyle = color;
+                    ctx.fillText(text, 8, 254 + i * 15);
+                });
         }
 
         function drawHistory() {
@@ -1199,6 +1348,31 @@
                 ctx.stroke();
             }
             
+            // Sensor arrivals: ADS-B reports as full-height lines, OpenCV results as
+            // ticks along the bottom (grey when nothing was detected)
+            const eventX = t => margin + (t - minT) * xScale;
+            ctx.lineWidth = 1;
+            for (const e of state.events.opencv) {
+                if (e.t < minT || e.t > maxT) continue;
+                const x = eventX(e.t);
+                ctx.strokeStyle = e.valid ? OPENCV_COLOR : '#666';
+                ctx.beginPath();
+                ctx.moveTo(x, h - 8);
+                ctx.lineTo(x, h);
+                ctx.stroke();
+            }
+            ctx.strokeStyle = ADSB_COLOR;
+            ctx.setLineDash([4, 3]);
+            for (const t of state.events.adsb) {
+                if (t < minT || t > maxT) continue;
+                const x = eventX(t);
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, h - 8);
+                ctx.stroke();
+            }
+            ctx.setLineDash([]);
+
             // Draw data
             drawLine(state.history.panError, '#ff6666');
             drawLine(state.history.tiltError, '#66ff66');
@@ -1210,6 +1384,16 @@
             drawLine(panRateScaled, '#6666ff');
             drawLine(tiltRateScaled, '#ffff66');
             ctx.globalAlpha = 1.0;
+
+            // Legend
+            ctx.font = '11px monospace';
+            let lx = margin + 4;
+            [['pan err', '#ff6666'], ['tilt err', '#66ff66'], ['pan cmd/10', '#6666ff'], ['tilt cmd/10', '#ffff66'],
+             ['┆ ADS-B report', ADSB_COLOR], ['▮ OpenCV result', OPENCV_COLOR]].forEach(([text, color]) => {
+                ctx.fillStyle = color;
+                ctx.fillText(text, lx, 12);
+                lx += ctx.measureText(text).width + 14;
+            });
         }
 
         function updateUI() {
@@ -1259,6 +1443,35 @@
             modeEl.textContent = state.mode.toUpperCase();
             modeEl.className = 'mode-indicator mode-' + state.mode;
             
+            // Sensor feeds: lights flash on arrival, ADS-B bar fills until the next report
+            const adsbLed = document.getElementById('adsbLed');
+            const opencvLed = document.getElementById('opencvLed');
+            const fAdsb = flash(state.lastAdsbTime, 1000);
+            const fOpencv = flash(state.lastOpencvArrival, 150);
+            adsbLed.style.opacity = 0.25 + 0.75 * fAdsb;
+            adsbLed.style.boxShadow = `0 0 ${10 * fAdsb}px ${ADSB_COLOR}`;
+            opencvLed.style.opacity = 0.25 + 0.75 * fOpencv;
+            opencvLed.style.boxShadow = `0 0 ${10 * fOpencv}px ${OPENCV_COLOR}`;
+
+            if (state.adsbPosition) {
+                const age = state.time - state.lastAdsbTime;
+                document.getElementById('adsbAge').textContent = `report · ${(age / 1000).toFixed(1)} s ago`;
+                document.getElementById('adsbNext').style.width = Math.min(100, age / ADSB_UPDATE_RATE * 100) + '%';
+            } else {
+                document.getElementById('adsbAge').textContent = '--';
+                document.getElementById('adsbNext').style.width = '0%';
+            }
+
+            const opencvAge = document.getElementById('opencvAge');
+            if (state.lastMeasurement) {
+                const detected = state.lastMeasurement.valid;
+                opencvAge.textContent = `${detected ? 'detect' : 'no detect'} · ${((state.time - state.lastOpencvArrival) / 1000).toFixed(2)} s ago`;
+                opencvAge.className = 'stat-value ' + (detected ? 'good' : 'warning');
+            } else {
+                opencvAge.textContent = '--';
+                opencvAge.className = 'stat-value';
+            }
+
             // Latency bars
             const ocvProgress = (state.measurementQueue.length > 0) ? 
                 ((state.time - (state.measurementQueue[0].time - OPENCV_PERIOD)) / OPENCV_PERIOD * 100) : 0;
@@ -1313,6 +1526,9 @@
                 },
                 lastAdsbTime: -Infinity,
                 adsbPosition: null,
+                adsbReports: [],
+                lastOpencvArrival: -Infinity,
+                events: { adsb: [], opencv: [] },
                 mode: 'cueing',
                 history: {
                     time: [],
